@@ -544,6 +544,15 @@ impl KoadDB {
         Ok(results)
     }
 
+    pub fn get_recent_deltas(&self, minutes: i64) -> Result<Vec<(String, String, String)>> {
+        let cutoff = (Local::now() - Duration::minutes(minutes)).format("%Y-%m-%d %H:%M:%S").to_string();
+        let mut stmt = self.conn.prepare("SELECT path, event_type, timestamp FROM project_state WHERE timestamp > ?1 ORDER BY timestamp DESC LIMIT 10")?;
+        let rows = stmt.query_map(params![cutoff], |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)))?;
+        let mut results = Vec::new();
+        for row in rows { results.push(row?); }
+        Ok(results)
+    }
+
     pub fn get_active_project(&self, current_path: &str) -> Result<Option<(String, Option<String>, Option<String>)>> {
         let mut stmt = self.conn.prepare("SELECT name, role, stack FROM projects WHERE path = ?1 AND active = 1")?;
         let mut rows = stmt.query(params![current_path])?;
@@ -737,6 +746,17 @@ fn main() -> Result<()> {
 
                 println!("\n[Contextual Memory]");
                 for (cat, content) in db.get_contextual(8, tags)? { println!("- [{}] {}", cat, content); }
+
+                if config.preferences.booster_enabled {
+                    let deltas = db.get_recent_deltas(60)?;
+                    if !deltas.is_empty() {
+                        println!("\n[Booster Deltas (Last 60m)]");
+                        for (path, event, ts) in deltas {
+                            let p = PathBuf::from(path);
+                            println!("- {}: {} ({})", event, p.file_name().unwrap_or_default().to_string_lossy(), ts);
+                        }
+                    }
+                }
 
                 println!("\n[Notion Index Summary]");
                 let index = db.get_notion_index()?;

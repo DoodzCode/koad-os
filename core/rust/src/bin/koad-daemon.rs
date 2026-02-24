@@ -1,11 +1,14 @@
-use notify::{Watcher, RecursiveMode, Result};
+use notify::{Watcher, RecursiveMode, Config, Event};
 use std::path::{Path, PathBuf};
-use std::sync::mpsc::channel;
 use rusqlite::{params, Connection};
 use dirs;
+use std::fs::OpenOptions;
+use std::io::Write;
+use std::sync::{Arc, Mutex};
 
 struct Daemon {
-    db_conn: Connection,
+    db_conn: Arc<Mutex<Connection>>,
+    log_path: PathBuf,
 }
 
 impl Daemon {
@@ -15,9 +18,9 @@ impl Daemon {
             .or_else(|_| dirs::home_dir().ok_or_else(|| anyhow::anyhow!("Home dir not found")).map(|h| h.join(".koad-os")))?;
         
         let db_path = home.join("koad.db");
+        let log_path = home.join("daemon.log");
         let conn = Connection::open(db_path)?;
         
-        // Ensure the project_state table exists
         conn.execute(
             "CREATE TABLE IF NOT EXISTS project_state (
                 id INTEGER PRIMARY KEY,
@@ -29,55 +32,66 @@ impl Daemon {
             [],
         )?;
         
-        Ok(Self { db_conn: conn })
+        Ok(Self { 
+            db_conn: Arc::new(Mutex::new(conn)), 
+            log_path 
+        })
+    }
+
+    fn debug_log(&self, msg: &str) {
+        if let Ok(mut file) = OpenOptions::new().append(true).create(true).open(&self.log_path) {
+            let now = chrono::Local::now().format("%Y-%m-%d %H:%M:%S").to_string();
+            let _ = writeln!(file, "[{}] {}", now, msg);
+        }
     }
 
     fn log_change(&self, path: &Path, event_type: &str) -> std::result::Result<(), anyhow::Error> {
         let now = chrono::Local::now().format("%Y-%m-%d %H:%M:%S").to_string();
         let path_str = path.to_string_lossy().to_string();
         
-        // Filter out noise
-        if path_str.contains(".git/") || path_str.contains("target/") || path_str.contains(".koad-os") {
+        self.debug_log(&format!("Event: {} on {}", event_type, path_str));
+
+        if path_str.contains(".git/") || path_str.contains("target/") || path_str.contains("daemon.log") || path_str.contains(".koad-os") {
             return Ok(());
         }
 
-        self.db_conn.execute(
+        let conn = self.db_conn.lock().unwrap();
+        conn.execute(
             "INSERT INTO project_state (path, event_type, timestamp) VALUES (?1, ?2, ?3)",
             params![path_str, event_type, now],
         )?;
         
-        println!("[DAEMON] Logged {} on {}", event_type, path_str);
         Ok(())
     }
 }
 
-fn main() -> Result<()> {
-    println!("--- Koad Cognitive Booster Daemon Starting ---");
+fn main() -> notify::Result<()> {
+    let daemon = Arc::new(Daemon::init().map_err(|e| notify::Error::generic(&e.to_string()))?);
+    daemon.debug_log("--- Daemon Started (Callback Mode) ---");
     
-    // Fix: map_err using a reference
-    let daemon = Daemon::init().map_err(|e| notify::Error::generic(&e.to_string()))?;
-    let (tx, rx) = channel();
+    let daemon_clone = Arc::clone(&daemon);
+    let mut watcher = notify::RecommendedWatcher::new(
+        move |res: notify::Result<Event>| {
+            match res {
+                Ok(event) => {
+                    let kind_str = format!("{:?}", event.kind);
+                    for path in event.paths {
+                        let _ = daemon_clone.log_change(&path, &kind_str);
+                    }
+                },
+                Err(e) => daemon_clone.debug_log(&format!("Watch Error: {:?}", e)),
+            }
+        },
+        Config::default(),
+    )?;
 
-    // Watch current directory
-    let mut watcher = notify::RecommendedWatcher::new(tx, notify::Config::default())?;
     let current_dir = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+    daemon.debug_log(&format!("Watching: {}", current_dir.display()));
     
-    println!("[DAEMON] Watching project at: {}", current_dir.display());
     watcher.watch(&current_dir, RecursiveMode::Recursive)?;
 
-    // Event Loop
-    for res in rx {
-        match res {
-            Ok(event) => {
-                if event.kind.is_modify() || event.kind.is_create() || event.kind.is_remove() {
-                    for path in event.paths {
-                        let _ = daemon.log_change(&path, &format!("{:?}", event.kind));
-                    }
-                }
-            },
-            Err(e) => println!("watch error: {:?}", e),
-        }
+    // Keep the main thread alive
+    loop {
+        std::thread::sleep(std::time::Duration::from_secs(60));
     }
-
-    Ok(())
 }
