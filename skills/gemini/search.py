@@ -3,16 +3,16 @@ import sys
 import subprocess
 import json
 
-def search_koad(query):
+def search_koad(query, limit=5):
     """
-    Queries the KoadOS SQLite database and formats output for Gemini.
+    Queries the KoadOS SQLite database with ranking and limit.
     """
-    print(f"--- KoadOS Memory Search: '{query}' ---")
+    print(f"--- KoadOS Surgical Search: '{query}' (Limit: {limit}) ---")
     
     try:
-        # Run koad query
+        # Run koad query with limit
         result = subprocess.run(
-            ["/home/ideans/.koad-os/bin/koad", "query", query],
+            ["/home/ideans/.koad-os/bin/koad", "query", query, "--limit", str(limit)],
             capture_output=True,
             text=True,
             check=True

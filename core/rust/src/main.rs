@@ -86,7 +86,13 @@ enum Commands {
     /// Search the Koad Knowledge Base for a specific term or tag.
     Query { 
         /// Search term or tag.
-        term: String 
+        term: String,
+        /// Maximum results to return (Token Efficiency).
+        #[arg(short, long, default_value_t = 10)]
+        limit: usize,
+        /// (Optional) Filter by specific comma-separated tags.
+        #[arg(short, long)]
+        tags: Option<String>,
     },
     /// Commit a new fact or learning to the persistent SQLite database.
     Remember {
@@ -477,9 +483,30 @@ impl KoadDB {
         Ok(())
     }
 
-    pub fn query(&self, term: &str) -> Result<Vec<(i64, String, String, String)>> {
-        let mut stmt = self.conn.prepare("SELECT id, category, content, timestamp FROM knowledge WHERE active = 1 AND (content LIKE ?1 OR tags LIKE ?1) ORDER BY timestamp DESC LIMIT 20")?;
-        let rows = stmt.query_map(params![format!("%{}%", term)], |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)))?;
+    pub fn query(&self, term: &str, limit: usize, tags: Option<String>) -> Result<Vec<(i64, String, String, String)>> {
+        let mut query_str = String::from("SELECT id, category, content, timestamp FROM knowledge WHERE active = 1");
+        let mut params_vec: Vec<rusqlite::types::Value> = Vec::new();
+        
+        if !term.is_empty() {
+            query_str.push_str(" AND (content LIKE ?1 OR tags LIKE ?1)");
+            params_vec.push(format!("%{}%", term).into());
+        }
+
+        if let Some(t) = tags {
+            for tag in t.split(',') {
+                query_str.push_str(" AND tags LIKE ?");
+                params_vec.push(format!("%{}%", tag.trim()).into());
+                query_str.push_str(&(params_vec.len()).to_string());
+            }
+        }
+
+        query_str.push_str(" ORDER BY timestamp DESC LIMIT ?");
+        params_vec.push((limit as i64).into());
+        query_str.push_str(&(params_vec.len()).to_string());
+
+        let mut stmt = self.conn.prepare(&query_str)?;
+        let rows = stmt.query_map(rusqlite::params_from_iter(params_vec), |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)))?;
+        
         let mut results = Vec::new();
         for row in rows { results.push(row?); }
         Ok(results)
@@ -711,8 +738,8 @@ fn main() -> Result<()> {
             let (d, _) = get_gdrive_token_for_path(&current_dir);
             println!("GH:{} | GD:{}", p, d);
         }
-        Commands::Query { term } => {
-            for (id, cat, content, ts) in db.query(&term)? { println!("- ID:{} [{}] ({}) {}", id, cat, ts, content); }
+        Commands::Query { term, limit, tags } => {
+            for (id, cat, content, ts) in db.query(&term, limit, tags)? { println!("- ID:{} [{}] ({}) {}", id, cat, ts, content); }
         }
         Commands::Remember { category } => {
             if !has_privileged_access { anyhow::bail!("Access Denied."); }

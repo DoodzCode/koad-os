@@ -53,7 +53,7 @@ pub fn run_dash(db: &KoadDB) -> Result<()> {
                 .split(chunks[1]);
 
             // 1. Knowledge Feed (Left)
-            if let Ok(recent) = db.query("") {
+            if let Ok(recent) = db.query("", 20, None) {
                 let items: Vec<ListItem> = recent.iter().take(20).map(|(_, cat, content, _)| {
                     let style = match cat.as_str() {
                         "fact" => Style::default().fg(Color::Cyan),
