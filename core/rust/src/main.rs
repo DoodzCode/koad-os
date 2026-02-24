@@ -38,6 +38,8 @@ pub struct Identity {
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Preferences {
     pub languages: Vec<String>,
+    #[serde(default)]
+    pub booster_enabled: bool,
     pub style: String,
     pub principles: Vec<String>,
 }
@@ -138,6 +140,8 @@ enum Commands {
         #[command(subcommand)]
         source: SyncSource,
     },
+    /// Start the Koad background service (Cognitive Booster).
+    Serve,
     /// Interact with the Koad Stream (Notion-backed communication channel).
     Stream {
         #[command(subcommand)]
@@ -402,6 +406,7 @@ impl KoadConfig {
             },
             preferences: Preferences {
                 languages: vec!["Rust".into(), "Node.js".into(), "Python".into()],
+                booster_enabled: false,
                 style: "programmatic-first".to_string(),
                 principles: vec![
                     "Simplicity first".into(), 
@@ -649,6 +654,22 @@ fn run_diagnostic(full: bool, config: &KoadConfig) -> Result<()> {
                 println!("[INFO] {} is not installed (Optional)", tool);
             }
         }
+
+        // Expansion: Cognitive Booster
+        println!("\n--- Expansions ---");
+        if config.preferences.booster_enabled {
+            let daemon_path = home.join("bin/koad-daemon");
+            if daemon_path.exists() {
+                println!("[PASS] Cognitive Booster: Enabled & Installed");
+                let is_running = Command::new("pgrep").arg("-f").arg("koad-daemon").output().map(|o| o.status.success()).unwrap_or(false);
+                if is_running { println!("[PASS] koad-daemon is running"); }
+                else { println!("[INFO] koad-daemon is NOT running (Use 'koad serve' to start)"); }
+            } else {
+                println!("[FAIL] Cognitive Booster: Enabled in config but binary missing at {}", daemon_path.display());
+            }
+        } else {
+            println!("[INFO] Cognitive Booster: Disabled (Optional Expansion)");
+        }
     }
 
     println!("\nStatus: {}", if files_missing { "DEGRADED" } else { "OPERATIONAL" });
@@ -804,6 +825,19 @@ fn main() -> Result<()> {
                 }
             }
         }
+        Commands::Serve => {
+            if !config.preferences.booster_enabled {
+                anyhow::bail!("Cognitive Booster is disabled in koad.json. Enable it to use 'koad serve'.");
+            }
+            let daemon_path = KoadConfig::get_home()?.join("bin/koad-daemon");
+            if !daemon_path.exists() { anyhow::bail!("koad-daemon binary not found."); }
+            
+            println!("Starting Koad Cognitive Booster in background...");
+            Command::new(daemon_path)
+                .spawn()
+                .context("Failed to launch daemon")?;
+            println!("[PASS] Daemon launched.");
+        },
         Commands::Sync { source } => {
             if !has_privileged_access { anyhow::bail!("Access Denied."); }
             match source {
