@@ -385,12 +385,12 @@ impl KoadConfig {
     }
 }
 
-struct KoadDB {
-    conn: Connection,
+pub struct KoadDB {
+    pub conn: Connection,
 }
 
 impl KoadDB {
-    fn init() -> Result<Self> {
+    pub fn init() -> Result<Self> {
         let path = KoadConfig::get_db_path()?;
         let conn = Connection::open(path)?;
         conn.execute("CREATE TABLE IF NOT EXISTS knowledge (id INTEGER PRIMARY KEY, category TEXT NOT NULL, content TEXT NOT NULL, tags TEXT, timestamp TEXT NOT NULL, active INTEGER DEFAULT 1)", [])?;
@@ -400,13 +400,13 @@ impl KoadDB {
         Ok(Self { conn })
     }
 
-    fn remember(&self, category: &str, content: &str, tags: Option<String>) -> Result<()> {
+    pub fn remember(&self, category: &str, content: &str, tags: Option<String>) -> Result<()> {
         let timestamp = Local::now().format("%Y-%m-%d %H:%M:%S").to_string();
         self.conn.execute("INSERT INTO knowledge (category, content, tags, timestamp) VALUES (?1, ?2, ?3, ?4)", params![category, content, tags, timestamp])?;
         Ok(())
     }
 
-    fn get_ponderings(&self, limit: usize) -> Result<Vec<String>> {
+    pub fn get_ponderings(&self, limit: usize) -> Result<Vec<String>> {
         let mut stmt = self.conn.prepare("SELECT content FROM knowledge WHERE category = 'pondering' AND active = 1 ORDER BY timestamp DESC LIMIT ?1")?;
         let rows = stmt.query_map(params![limit], |row| Ok(row.get(0)?))?;
         let mut results = Vec::new();
@@ -414,33 +414,33 @@ impl KoadDB {
         Ok(results)
     }
 
-    fn log_execution(&self, command: &str, args: &str, status: &str) -> Result<()> {
+    pub fn log_execution(&self, command: &str, args: &str, status: &str) -> Result<()> {
         let timestamp = Local::now().format("%Y-%m-%d %H:%M:%S").to_string();
         self.conn.execute("INSERT INTO executions (command, args, timestamp, status) VALUES (?1, ?2, ?3, ?4)", params![command, args, timestamp, status])?;
         Ok(())
     }
 
-    fn get_recent_executions(&self, hours: i64) -> Result<Vec<(String, String)>> {
+    pub fn get_recent_executions(&self, hours: i64) -> Result<Vec<(String, String, String)>> {
         let cutoff = (Local::now() - Duration::hours(hours)).format("%Y-%m-%d %H:%M:%S").to_string();
-        let mut stmt = self.conn.prepare("SELECT command, args FROM executions WHERE timestamp > ?1 AND status = 'success' GROUP BY command, args")?;
-        let rows = stmt.query_map(params![cutoff], |row| Ok((row.get(0)?, row.get(1)?)))?;
+        let mut stmt = self.conn.prepare("SELECT command, args, status FROM executions WHERE timestamp > ?1 ORDER BY timestamp DESC LIMIT 15")?;
+        let rows = stmt.query_map(params![cutoff], |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)))?;
         let mut results = Vec::new();
         for row in rows { results.push(row?); }
         Ok(results)
     }
 
-    fn register_project(&self, name: &str, path: &str) -> Result<()> {
+    pub fn register_project(&self, name: &str, path: &str) -> Result<()> {
         let last_boot = Local::now().format("%Y-%m-%d %H:%M:%S").to_string();
         self.conn.execute("INSERT INTO projects (name, path, last_boot) VALUES (?1, ?2, ?3) ON CONFLICT(name) DO UPDATE SET last_boot=?3, path=?2", params![name, path, last_boot])?;
         Ok(())
     }
 
-    fn retire(&self, id: i64) -> Result<()> {
+    pub fn retire(&self, id: i64) -> Result<()> {
         self.conn.execute("UPDATE knowledge SET active = 0 WHERE id = ?1", params![id])?;
         Ok(())
     }
 
-    fn query(&self, term: &str) -> Result<Vec<(i64, String, String, String)>> {
+    pub fn query(&self, term: &str) -> Result<Vec<(i64, String, String, String)>> {
         let mut stmt = self.conn.prepare("SELECT id, category, content, timestamp FROM knowledge WHERE active = 1 AND (content LIKE ?1 OR tags LIKE ?1) ORDER BY timestamp DESC LIMIT 20")?;
         let rows = stmt.query_map(params![format!("%{}%", term)], |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)))?;
         let mut results = Vec::new();
@@ -448,7 +448,7 @@ impl KoadDB {
         Ok(results)
     }
 
-    fn get_contextual(&self, limit: usize, tags: Vec<String>) -> Result<Vec<(String, String)>> {
+    pub fn get_contextual(&self, limit: usize, tags: Vec<String>) -> Result<Vec<(String, String)>> {
         let mut results = Vec::new();
         if !tags.is_empty() {
             let mut query = String::from("SELECT category, content FROM knowledge WHERE active = 1 AND category != 'pondering' AND (");
@@ -475,13 +475,13 @@ impl KoadDB {
         Ok(results)
     }
 
-    fn get_active_project(&self, current_path: &str) -> Result<Option<(String, Option<String>, Option<String>)>> {
+    pub fn get_active_project(&self, current_path: &str) -> Result<Option<(String, Option<String>, Option<String>)>> {
         let mut stmt = self.conn.prepare("SELECT name, role, stack FROM projects WHERE path = ?1 AND active = 1")?;
         let mut rows = stmt.query(params![current_path])?;
         if let Some(row) = rows.next()? { Ok(Some((row.get(0)?, row.get(1)?, row.get(2)?))) } else { Ok(None) }
     }
 
-    fn get_notion_index(&self) -> Result<Vec<(String, String, String, String, String)>> {
+    pub fn get_notion_index(&self) -> Result<Vec<(String, String, String, String, String)>> {
         let mut stmt = self.conn.prepare("SELECT name, type, last_sync, cloud_edited, id FROM notion_index ORDER BY name ASC")?;
         let rows = stmt.query_map([], |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?, row.get(4)?)))?;
         let mut results = Vec::new();
@@ -805,7 +805,7 @@ fn main() -> Result<()> {
             if let Some(f) = facts { for item in f.split(',') { db.remember("fact", item.trim(), Some(scope.clone()))?; } }
             if auto {
                 let recent = db.get_recent_executions(4)?;
-                for (cmd, args) in recent { db.remember("fact", &format!("Verified {} with: {}", cmd, args), Some(format!("auto,{}", scope)))?; }
+                for (cmd, args, _) in recent { db.remember("fact", &format!("Verified {} with: {}", cmd, args), Some(format!("auto,{}", scope)))?; }
             }
             let log_entry = format!("\n## {} - {}\n- Scope: {}\n- Project: {}\n", Local::now().format("%Y-%m-%d"), summary, scope, db.get_active_project(&env::current_dir()?.to_string_lossy())?.map(|(n,_,_)| n).unwrap_or("General".into()));
             std::fs::OpenOptions::new().append(true).create(true).open(KoadConfig::get_log_path()?)?.write_all(log_entry.as_bytes())?;
