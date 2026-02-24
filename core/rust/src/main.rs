@@ -183,12 +183,36 @@ enum Commands {
     Whoami,
     /// Run a real-time TUI dashboard of the KoadOS state.
     Dash,
+    /// Track or update the current active task specification.
+    Spec {
+        #[command(subcommand)]
+        action: SpecAction,
+    },
     /// Run a self-diagnostic check of the KoadOS environment.
     Diagnostic {
         /// Perform a full system check including skills and remote access.
         #[arg(short, long)]
         full: bool,
     },
+}
+
+#[derive(Subcommand)]
+enum SpecAction {
+    /// Update the current task specification.
+    Set {
+        /// Task title.
+        title: String,
+        /// (Optional) Detailed description or plan.
+        #[arg(short, long)]
+        desc: Option<String>,
+        /// Task status (Active, Paused, Complete).
+        #[arg(short, long, default_value = "Active")]
+        status: String,
+    },
+    /// Display the current task specification.
+    Read,
+    /// Clear the current task specification.
+    Clear,
 }
 
 #[derive(Subcommand)]
@@ -397,7 +421,20 @@ impl KoadDB {
         conn.execute("CREATE TABLE IF NOT EXISTS projects (id INTEGER PRIMARY KEY, name TEXT NOT NULL UNIQUE, path TEXT NOT NULL, role TEXT, stack TEXT, last_boot TEXT, active INTEGER DEFAULT 1)", [])?;
         conn.execute("CREATE TABLE IF NOT EXISTS executions (id INTEGER PRIMARY KEY, command TEXT NOT NULL, args TEXT, timestamp TEXT NOT NULL, status TEXT)", [])?;
         conn.execute("CREATE TABLE IF NOT EXISTS notion_index (id TEXT PRIMARY KEY, name TEXT, type TEXT, last_sync TEXT, cloud_edited TEXT, url TEXT)", [])?;
+        conn.execute("CREATE TABLE IF NOT EXISTS active_spec (id INTEGER PRIMARY KEY, title TEXT NOT NULL, description TEXT, status TEXT, last_update TEXT NOT NULL)", [])?;
         Ok(Self { conn })
+    }
+
+    pub fn set_spec(&self, title: &str, description: Option<String>, status: &str) -> Result<()> {
+        let now = Local::now().format("%Y-%m-%d %H:%M:%S").to_string();
+        self.conn.execute("INSERT INTO active_spec (id, title, description, status, last_update) VALUES (1, ?1, ?2, ?3, ?4) ON CONFLICT(id) DO UPDATE SET title=?1, description=?2, status=?3, last_update=?4", params![title, description, status, now])?;
+        Ok(())
+    }
+
+    pub fn get_spec(&self) -> Result<Option<(String, Option<String>, String, String)>> {
+        let mut stmt = self.conn.prepare("SELECT title, description, status, last_update FROM active_spec WHERE id = 1")?;
+        let mut rows = stmt.query([])?;
+        if let Some(row) = rows.next()? { Ok(Some((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?))) } else { Ok(None) }
     }
 
     pub fn remember(&self, category: &str, content: &str, tags: Option<String>) -> Result<()> {
@@ -602,6 +639,23 @@ fn main() -> Result<()> {
 
     match cli.command {
         Commands::Dash => tui::run_dash(&db)?,
+        Commands::Spec { action } => {
+            match action {
+                SpecAction::Set { title, desc, status } => db.set_spec(&title, desc, &status)?,
+                SpecAction::Read => {
+                    if let Some((t, d, s, ts)) = db.get_spec()? {
+                        println!("--- Active Spec [{}] ---", ts);
+                        println!("Title:   {}", t);
+                        println!("Status:  {}", s);
+                        if let Some(desc) = d { println!("Detail:  {}", desc); }
+                    } else { println!("No active task spec."); }
+                },
+                SpecAction::Clear => {
+                    db.conn.execute("DELETE FROM active_spec WHERE id = 1", [])?;
+                    println!("Spec cleared.");
+                }
+            }
+        },
         Commands::Diagnostic { full } => run_diagnostic(full, &config)?,
         Commands::Boot { agent, project, task: _, compact } => {
             let current_dir = env::current_dir().unwrap_or_else(|_| PathBuf::from("."));

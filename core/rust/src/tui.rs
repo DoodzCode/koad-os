@@ -68,14 +68,23 @@ pub fn run_dash(db: &KoadDB) -> Result<()> {
             }
 
             // 2. Persona Journal (Middle)
-            if let Ok(ponders) = db.get_ponderings(20) {
-                let items: Vec<ListItem> = ponders.iter().map(|p| {
-                    ListItem::new(format!("> {}", p)).style(Style::default().fg(Color::Magenta))
-                }).collect();
-                let list = List::new(items)
-                    .block(Block::default().borders(Borders::ALL).title(" Persona Journal "));
-                f.render_widget(list, body_chunks[1]);
+            let mut journal_items: Vec<ListItem> = Vec::new();
+            if let Ok(Some((title, _, status, ts))) = db.get_spec() {
+                journal_items.push(ListItem::new(format!("[ACTIVE TASK: {}]", status.to_uppercase()))
+                    .style(Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD)));
+                journal_items.push(ListItem::new(format!("  {} ({})", title, ts))
+                    .style(Style::default().fg(Color::Yellow)));
+                journal_items.push(ListItem::new("--------------------------")
+                    .style(Style::default().fg(Color::DarkGray)));
             }
+            if let Ok(ponders) = db.get_ponderings(20) {
+                for p in ponders {
+                    journal_items.push(ListItem::new(format!("> {}", p)).style(Style::default().fg(Color::Magenta)));
+                }
+            }
+            let list = List::new(journal_items)
+                .block(Block::default().borders(Borders::ALL).title(" Persona Journal "));
+            f.render_widget(list, body_chunks[1]);
 
             // 3. Command Pulse (Right)
             if let Ok(execs) = db.get_recent_executions(24) {

@@ -12,3 +12,4 @@ The Notion CLI commands (`koad stream`, `koad sync notion`) are now reconfigured
 3. **Context Persistence**: Always run `koad boot` at session start.
 4. **Fact Harvesting**: Use `koad saveup` to capture learnings.
 5. **Surgical Discovery**: Prioritize `fdfind` (via `fd`) for locating files during research. Use `--extension` or `--type` flags to minimize noise and improve discovery speed.
+6. **Token Conservation**: Actively minimize context noise. If a requested feature or operation significantly increases token usage (e.g., massive file injections, recursive deep-scans), propose a lower-cost alternative or seek explicit Partner approval before proceeding.
