@@ -9,6 +9,8 @@ use chrono::{Local, Duration};
 use std::io::{BufRead, BufReader, Write};
 use rusqlite::{params, Connection};
 
+mod tui;
+
 #[derive(Debug, Serialize, Deserialize)]
 pub struct KoadConfig {
     pub version: String,
@@ -179,6 +181,8 @@ enum Commands {
     },
     /// Display information about the current KoadOS identity and environment.
     Whoami,
+    /// Run a real-time TUI dashboard of the KoadOS state.
+    Dash,
     /// Run a self-diagnostic check of the KoadOS environment.
     Diagnostic {
         /// Perform a full system check including skills and remote access.
@@ -597,6 +601,7 @@ fn main() -> Result<()> {
     let has_privileged_access = is_admin || is_pm;
 
     match cli.command {
+        Commands::Dash => tui::run_dash(&db)?,
         Commands::Diagnostic { full } => run_diagnostic(full, &config)?,
         Commands::Boot { agent, project, task: _, compact } => {
             let current_dir = env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
