@@ -7,30 +7,52 @@ from pathlib import Path
 
 def run_fd(pattern, path="."):
     try:
-        result = subprocess.run(["fdfind", "--glob", pattern, "--max-depth", "3", "--no-ignore", path], capture_output=True, text=True, check=True)
+        result = subprocess.run(["fdfind", "--glob", pattern, "--max-depth", "5", "--no-ignore", path], capture_output=True, text=True, check=True)
         return result.stdout.strip().splitlines()
     except:
         return []
 
+def get_architecture_summary(file_path):
+    """
+    Extracts high-level architectural signals (structs, classes, exports).
+    """
+    summary = []
+    try:
+        with open(file_path, 'r') as f:
+            lines = f.readlines()
+            for line in lines[:200]: # Only scan top of file for efficiency
+                line = line.strip()
+                # Rust Signals
+                if file_path.endswith(".rs"):
+                    if line.startswith("pub struct") or line.startswith("pub enum") or line.startswith("pub fn"):
+                        summary.append(line.replace(" {", ""))
+                # JS/TS Signals
+                elif file_path.endswith((".js", ".ts")):
+                    if line.startswith("export class") or line.startswith("export const") or line.startswith("export function"):
+                        summary.append(line.replace(" {", ""))
+    except:
+        pass
+    return summary[:5] # Limit to top 5 signals per file
+
 def map_project(path="."):
     """
-    Surgical Project Mapping:
-    Identifies entry points and config files with minimal token usage.
+    Surgical Project Mapping with Architectural Intelligence.
     """
     print(f"--- Koad Detective: Mapping {os.path.abspath(path)} ---")
     
     report = {
         "identity": os.path.basename(os.path.abspath(path)),
-        "core": [],
+        "core": {},
         "config": [],
         "tests": []
     }
     
-    # 1. Detect Core Entry Points
-    core_patterns = ["*main.rs", "*index.js", "*app.py", "*main.c", "*index.ts"]
+    # 1. Detect Core Entry Points & Shape
+    core_patterns = ["main.rs", "lib.rs", "mod.rs", "index.js", "index.ts", "tui.rs"]
     for p in core_patterns:
         found = run_fd(p, path)
-        if found: report["core"].extend(found[:2])
+        for f in found:
+            report["core"][f] = get_architecture_summary(f)
 
     # 2. Detect Configuration Files
     config_patterns = ["Cargo.toml", "package.json", "requirements.txt", "go.mod", "koad.json", "Dockerfile"]
