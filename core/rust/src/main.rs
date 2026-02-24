@@ -813,9 +813,42 @@ fn main() -> Result<()> {
         }
         Commands::Scan { path } => {
             let t = path.unwrap_or_else(|| env::current_dir().unwrap_or(PathBuf::from(".")));
-            if t.join(".koad").exists() {
-                db.register_project(&t.file_name().unwrap().to_string_lossy(), &t.to_string_lossy())?;
-                println!("Project registered.");
+            println!("Scanning for Koad projects in {}...", t.display());
+            
+            // Use fd-find to locate all .koad directories quickly
+            let output = Command::new("fdfind")
+                .arg(".koad")
+                .arg("--type").arg("d")
+                .arg("--hidden")
+                .arg("--absolute-path")
+                .arg(&t)
+                .output();
+
+            match output {
+                Ok(out) if out.status.success() => {
+                    let paths = String::from_utf8_lossy(&out.stdout);
+                    let mut count = 0;
+                    for line in paths.lines() {
+                        let koad_path = PathBuf::from(line);
+                        let project_root = koad_path.parent().unwrap_or(&koad_path);
+                        let name = project_root.file_name().unwrap_or_default().to_string_lossy();
+                        
+                        if db.register_project(&name, &project_root.to_string_lossy()).is_ok() {
+                            println!("[PASS] Registered: {} ({})", name, project_root.display());
+                            count += 1;
+                        }
+                    }
+                    println!("Scan complete. {} project(s) registered.", count);
+                },
+                _ => {
+                    // Fallback to single directory check if fd fails or is missing
+                    if t.join(".koad").exists() {
+                        db.register_project(&t.file_name().unwrap().to_string_lossy(), &t.to_string_lossy())?;
+                        println!("Project registered.");
+                    } else {
+                        println!("[INFO] No .koad directories found.");
+                    }
+                }
             }
         }
         Commands::Publish { message } => {

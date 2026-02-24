@@ -11,3 +11,4 @@ The Notion CLI commands (`koad stream`, `koad sync notion`) are now reconfigured
 2. **Consolidated Sync**: Use `koad sync notion` to trigger a multi-database pass instead of manual querying.
 3. **Context Persistence**: Always run `koad boot` at session start.
 4. **Fact Harvesting**: Use `koad saveup` to capture learnings.
+5. **Surgical Discovery**: Prioritize `fdfind` (via `fd`) for locating files during research. Use `--extension` or `--type` flags to minimize noise and improve discovery speed.

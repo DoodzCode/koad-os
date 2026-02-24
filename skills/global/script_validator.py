@@ -13,14 +13,16 @@ def main():
     base_dir = Path("/home/ideans/data/skylinks/skylinks-scripts/src")
 
     if args.action == "list":
-        print("Inventory of Skylinks Scripts:")
-        for category in ["airtable", "google-apps", "local"]:
-            cat_dir = base_dir / category
-            if cat_dir.exists():
-                print(f"\n[{category.upper()}]")
-                for script in cat_dir.rglob("*"):
-                    if script.is_file():
-                        print(f"- {script.relative_to(base_dir)}")
+        print("Inventory of Skylinks Scripts (Optimized via fd):")
+        # Use fd-find for fast recursive listing
+        result = subprocess.run(
+            ["fdfind", ".", str(base_dir), "--type", "f", "--strip-cwd-prefix"],
+            capture_output=True,
+            text=True
+        )
+        if result.returncode == 0:
+            for line in result.stdout.splitlines():
+                print(f"- {line}")
         return
 
     if args.action == "check" and args.path:
