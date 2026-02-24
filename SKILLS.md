@@ -27,6 +27,12 @@ Use the koad CLI as a dispatcher:
 Example:
 `koad skill run global/cleanup.sh --dry-run`
 
+## Key Skills
+- **gemini/remember.py**: Bi-directional memory bridge (Internal <-> SQLite).
+- **gemini/harvest.py**: Context harvester and session logger.
+- **gemini/search.py**: Surgical knowledge retrieval with token-limits.
+- **gemini/detective.py**: High-speed project mapping and entry-point discovery.
+
 ## Guidelines
 - **Simplicity**: Favor single-file scripts when possible.
 - **Native Tech**: Use system-native interpreters (Python, Node, Bash).
