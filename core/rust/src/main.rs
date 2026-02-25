@@ -71,8 +71,8 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Commands {
-    /// Initialize agent context for the current session.
-    /// Loads identity, auth tokens, active project, and contextual memory.
+    /// [AGENT] Initialize agent context for the current session.
+    /// (Optimized for AI ingestion: loads identity, auth, and contextual memory)
     Boot {
         /// Select the agent driver to use (e.g., 'gemini').
         #[arg(short, long, default_value = "gemini")]
@@ -87,9 +87,9 @@ enum Commands {
         #[arg(short, long)]
         compact: bool,
     },
-    /// Display active authentication tokens for GitHub and Google Drive based on current directory.
+    /// [AGENT/HUMAN] Display active authentication tokens for GitHub and Google Drive.
     Auth,
-    /// Search the Koad Knowledge Base for a specific term or tag.
+    /// [HUMAN] Search the Koad Knowledge Base for a specific term or tag.
     Query { 
         /// Search term or tag.
         term: String,
@@ -100,12 +100,12 @@ enum Commands {
         #[arg(short, long)]
         tags: Option<String>,
     },
-    /// Commit a new fact or learning to the persistent SQLite database.
+    /// [AGENT/ADMIN] Commit a new fact or learning to the persistent SQLite database.
     Remember {
         #[command(subcommand)]
         category: MemoryCategory,
     },
-    /// Record a personal reflection or interpretation (Persona Journaling).
+    /// [AGENT] Record a personal reflection or interpretation (Persona Journaling).
     /// Used for agent self-alignment and long-term reasoning storage.
     Ponder {
         /// Reflection text.
@@ -114,23 +114,23 @@ enum Commands {
         #[arg(short, long)]
         tags: Option<String>,
     },
-    /// Manage and execute specialized KoadOS Skills (Python/JS/Rust).
+    /// [AGENT/HUMAN] Manage and execute specialized KoadOS Skills (Python/JS/Rust).
     Skill {
         #[command(subcommand)]
         action: SkillAction,
     },
-    /// Scaffold new files or projects using standardized KoadOS templates.
+    /// [HUMAN/AGENT] Scaffold new files or projects using standardized KoadOS templates.
     Template {
         #[command(subcommand)]
         action: TemplateAction,
     },
-    /// Initialize a new KoadOS root configuration (~/.koad-os/koad.json).
+    /// [ADMIN] Initialize a new KoadOS root configuration (~/.koad-os/koad.json).
     Init {
         /// Overwrite existing configuration.
         #[arg(short, long)]
         force: bool,
     },
-    /// Harvest discoveries from external files or git history into contextual memory.
+    /// [AGENT/ADMIN] Harvest discoveries from external files or git history into contextual memory.
     Harvest {
         /// Path to the file to harvest discoveries from.
         #[arg(short, long)]
@@ -139,39 +139,39 @@ enum Commands {
         #[arg(short, long)]
         git: bool,
     },
-    /// Synchronize state between local SQLite and cloud sources (Airtable/Notion).
+    /// [AGENT/ADMIN] Synchronize state between local SQLite and cloud sources (Airtable/Notion).
     Sync {
         #[command(subcommand)]
         source: SyncSource,
     },
-    /// Manage Airtable bases and records directly.
+    /// [AGENT/ADMIN] Manage Airtable bases and records directly.
     Airtable {
         #[command(subcommand)]
         action: AirtableAction,
     },
-    /// Start the Koad background service (Cognitive Booster).
+    /// [ADMIN] Start the Koad background service (Cognitive Booster).
     Serve,
-    /// Interact with the Koad Stream (Notion-backed communication channel).
+    /// [AGENT] Interact with the Koad Stream (Notion-backed communication channel).
     Stream {
         #[command(subcommand)]
         action: StreamAction,
     },
-    /// Execute Google Cloud Platform operations (Deployments, Logs, Audits).
+    /// [AGENT/ADMIN] Execute Google Cloud Platform operations (Deployments, Logs, Audits).
     Gcloud {
         #[command(subcommand)]
         action: GcloudAction,
     },
-    /// Manage files and synchronization with Google Drive.
+    /// [AGENT/ADMIN] Manage files and synchronization with Google Drive.
     Drive {
         #[command(subcommand)]
         action: DriveAction,
     },
-    /// Mark a knowledge entry as inactive (soft delete).
+    /// [ADMIN] Mark a knowledge entry as inactive (soft delete).
     Retire {
         /// ID of the knowledge record.
         id: i64,
     },
-    /// Archive the current session and capture learnings.
+    /// [AGENT/ADMIN] Archive the current session and capture learnings.
     /// Updates SESSION_LOG.md and harvests verified actions from history.
     Saveup {
         /// Short summary of the work completed.
@@ -186,18 +186,18 @@ enum Commands {
         #[arg(short, long)]
         auto: bool,
     },
-    /// Register the current directory as a project in the Koad ecosystem.
+    /// [ADMIN] Register the current directory as a project in the Koad ecosystem.
     /// Requires a .koad directory to be present.
     Scan {
         /// Path to scan (defaults to CWD).
         path: Option<PathBuf>,
     },
-    /// Save a quick note or idea from Ian to the agent.
+    /// [HUMAN] Save a quick note or idea from the user to the agent.
     Note {
         /// Note content.
         text: String,
     },
-    /// Record a brainstorm or rant to the personal ledger.
+    /// [HUMAN] Record a brainstorm or rant to the personal ledger.
     Brainstorm {
         /// Brainstorm or rant text.
         text: String,
@@ -205,19 +205,19 @@ enum Commands {
         #[arg(short, long)]
         rant: bool,
     },
-    /// List Ian's notes to the agent.
+    /// [HUMAN/AGENT] List user notes to the agent.
     Notes {
         /// Maximum notes to return.
         #[arg(short, long, default_value_t = 10)]
         limit: usize,
     },
-    /// List recent brainstorms and rants.
+    /// [HUMAN/AGENT] List recent brainstorms and rants.
     Brainstorms {
         /// Maximum brainstorms to return.
         #[arg(short, long, default_value_t = 10)]
         limit: usize,
     },
-    /// Dispatch a command to the Koad daemon for background execution.
+    /// [AGENT] Dispatch a command to the Koad daemon for background execution.
     Dispatch {
         /// The command to execute.
         command: String,
@@ -225,29 +225,33 @@ enum Commands {
         #[arg(short, long)]
         args: Option<String>,
     },
-    /// Publish all local KoadOS changes to the remote origin (git push).
+    /// [ADMIN] Publish all local KoadOS changes to the remote origin (git push).
     Publish {
         /// Custom commit message.
         #[arg(short, long)]
         message: Option<String>,
     },
-    /// Display information about the current KoadOS identity and environment.
+    /// [HUMAN] Display information about the current KoadOS identity and environment.
     Whoami,
-    /// Run a real-time TUI dashboard of the KoadOS state.
+    /// [HUMAN] Run a real-time TUI dashboard of the KoadOS state.
     Dash,
-    /// Track or update the current active task specification.
+    /// [HUMAN/AGENT] Track or update the current active task specification.
     Spec {
         #[command(subcommand)]
         action: SpecAction,
     },
-    /// Run a self-diagnostic check of the KoadOS environment.
+    /// [HUMAN/ADMIN] Run a self-diagnostic check of the KoadOS environment.
     Diagnostic {
         /// Perform a full system check including skills and remote access.
         #[arg(short, long)]
         full: bool,
     },
+    /// [HUMAN] Display KoadOS developer and onboarding guides.
+    Guide {
+        /// Guide name (onboarding, development, architecture).
+        topic: Option<String>,
+    },
 }
-
 #[derive(Subcommand)]
 enum SpecAction {
     /// Update the current task specification.
@@ -846,6 +850,41 @@ fn main() -> Result<()> {
             }
         },
         Commands::Diagnostic { full } => run_diagnostic(full, &config)?,
+        Commands::Guide { topic } => {
+            let docs_dir = KoadConfig::get_home()?.join("docs");
+            if let Some(t) = topic {
+                // Try to find the file regardless of case
+                let mut found = false;
+                if docs_dir.exists() {
+                    for entry in std::fs::read_dir(&docs_dir)? {
+                        let entry = entry?;
+                        let name = entry.path().file_stem().unwrap_or_default().to_string_lossy().to_lowercase();
+                        if name == t.to_lowercase() {
+                            let content = std::fs::read_to_string(entry.path())?;
+                            println!("{}", content);
+                            found = true;
+                            break;
+                        }
+                    }
+                }
+                if !found {
+                    println!("Guide for '{}' not found in {}.", t, docs_dir.display());
+                }
+            } else {
+                println!("--- KoadOS Developer & Onboarding Guides ---");
+                if docs_dir.exists() {
+                    for entry in std::fs::read_dir(docs_dir)? {
+                        let entry = entry?;
+                        if entry.path().extension().map_or(false, |e| e == "md") {
+                            println!("- {}", entry.path().file_stem().unwrap().to_string_lossy().to_lowercase());
+                        }
+                    }
+                } else {
+                    println!("No guides found.");
+                }
+                println!("\nUsage: koad guide <topic>");
+            }
+        }
         Commands::Boot { agent, project, task: _, compact } => {
             let current_dir = env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
             let current_path_str = current_dir.to_string_lossy().to_string();

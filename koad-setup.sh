@@ -11,12 +11,14 @@ usage() {
 }
 
 # Parse Arguments
+NON_INTERACTIVE=false
 while [[ "$#" -gt 0 ]]; do
     case $1 in
         --partner) PARTNER="$2"; shift ;;
         --persona) PERSONA="$2"; shift ;;
         --role) ROLE="$2"; shift ;;
         --langs) LANGS="$2"; shift ;;
+        --non-interactive) NON_INTERACTIVE=true ;;
         *) usage ;;
     esac
     shift
@@ -28,25 +30,70 @@ fi
 
 echo "--- KoadOS Installation: Initializing Persona '$PERSONA' ---"
 
-# 1. Dependency Check
-if ! command -v cargo &> /dev/null; then
-    echo "Error: Rust/Cargo is required for compilation."
+# 1. Pre-installation Checks
+echo "Running system pre-checks..."
+
+check_tool() {
+    if command -v "$1" &> /dev/null; then
+        version=$($1 --version 2>&1 | head -n 1)
+        echo "[PASS] $1 found: $version"
+        return 0
+    else
+        echo "[FAIL] $1 is missing."
+        return 1
+    fi
+}
+
+ERRORS=0
+check_tool git || ERRORS=$((ERRORS+1))
+check_tool cargo || ERRORS=$((ERRORS+1))
+check_tool python3 || ERRORS=$((ERRORS+1))
+check_tool node || echo "[WARN] Node.js is missing. Some skills may not function."
+check_tool npm || echo "[WARN] NPM is missing. Some skills may not function."
+
+if [ $ERRORS -gt 0 ]; then
+    echo "Error: Essential tools (git, cargo, python3) are missing. Please install them and try again."
     exit 1
 fi
 
-# 2. Compile Core
+# 2. Optional Features Consent
+INSTALL_BOOSTER=false
+if [ "$NON_INTERACTIVE" = false ]; then
+    read -p "Install Cognitive Booster Daemon (background file tracking)? [y/N]: " booster_choice
+    if [[ "$booster_choice" =~ ^[Yy]$ ]]; then
+        INSTALL_BOOSTER=true
+    fi
+    
+    if ! git config user.name &> /dev/null || ! git config user.email &> /dev/null; then
+        echo "Git identity not detected."
+        read -p "Configure basic Git identity for 'koad publish'? [y/N]: " git_choice
+        if [[ "$git_choice" =~ ^[Yy]$ ]]; then
+            read -p "Enter Git Name: " git_name
+            read -p "Enter Git Email: " git_email
+            git config --global user.name "$git_name"
+            git config --global user.email "$git_email"
+        fi
+    fi
+fi
+
+# 3. Compile Core
 echo "Compiling Rust core..."
 (cd core/rust && cargo build --release)
 
-# 3. Scaffold Operational Directories
+# 4. Scaffold Operational Directories
 echo "Scaffolding directories..."
 mkdir -p bin skills/global drivers/gemini templates
 
-# 4. Deploy Binary
+# 5. Deploy Binaries
 echo "Deploying binary..."
 cp core/rust/target/release/koad bin/koad
 
-# 5. Generate Initial koad.json
+if [ "$INSTALL_BOOSTER" = true ]; then
+    echo "Deploying Cognitive Booster..."
+    cp core/rust/target/release/koad-daemon bin/koad-daemon
+fi
+
+# 6. Generate Initial koad.json
 if [ ! -f "koad.json" ]; then
     echo "Generating koad.json..."
     
@@ -54,7 +101,7 @@ if [ ! -f "koad.json" ]; then
     IFS=',' read -ra ADDR <<< "$LANGS"
     LANG_JSON=""
     for i in "${ADDR[@]}"; do
-        LANG_JSON+=""$i","
+        LANG_JSON+="\"$i\","
     done
     LANG_JSON=${LANG_JSON%?} # Remove trailing comma
 
@@ -68,6 +115,7 @@ if [ ! -f "koad.json" ]; then
   },
   "preferences": {
     "languages": [$LANG_JSON],
+    "booster_enabled": $INSTALL_BOOSTER,
     "style": "programmatic-first",
     "principles": ["Simplicity first", "Plan before build"]
   },
@@ -84,11 +132,11 @@ else
     echo "koad.json already exists. Skipping generation."
 fi
 
-# 6. Initialize Database
+# 7. Initialize Database
 echo "Initializing SQLite database..."
 ./bin/koad init
 
-# 7. Final Configuration Instructions
+# 8. Final Configuration Instructions
 echo "--- Installation Complete ---"
 echo "Partner: $PARTNER"
 echo "Persona: $PERSONA"
