@@ -246,6 +246,11 @@ enum Commands {
         #[arg(short, long)]
         full: bool,
     },
+    /// Display KoadOS developer and onboarding guides.
+    Guide {
+        /// Guide name (onboarding, development, architecture).
+        topic: Option<String>,
+    },
 }
 
 #[derive(Subcommand)]
@@ -846,6 +851,41 @@ fn main() -> Result<()> {
             }
         },
         Commands::Diagnostic { full } => run_diagnostic(full, &config)?,
+        Commands::Guide { topic } => {
+            let docs_dir = KoadConfig::get_home()?.join("docs");
+            if let Some(t) = topic {
+                // Try to find the file regardless of case
+                let mut found = false;
+                if docs_dir.exists() {
+                    for entry in std::fs::read_dir(&docs_dir)? {
+                        let entry = entry?;
+                        let name = entry.path().file_stem().unwrap_or_default().to_string_lossy().to_lowercase();
+                        if name == t.to_lowercase() {
+                            let content = std::fs::read_to_string(entry.path())?;
+                            println!("{}", content);
+                            found = true;
+                            break;
+                        }
+                    }
+                }
+                if !found {
+                    println!("Guide for '{}' not found in {}.", t, docs_dir.display());
+                }
+            } else {
+                println!("--- KoadOS Developer & Onboarding Guides ---");
+                if docs_dir.exists() {
+                    for entry in std::fs::read_dir(docs_dir)? {
+                        let entry = entry?;
+                        if entry.path().extension().map_or(false, |e| e == "md") {
+                            println!("- {}", entry.path().file_stem().unwrap().to_string_lossy().to_lowercase());
+                        }
+                    }
+                } else {
+                    println!("No guides found.");
+                }
+                println!("\nUsage: koad guide <topic>");
+            }
+        }
         Commands::Boot { agent, project, task: _, compact } => {
             let current_dir = env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
             let current_path_str = current_dir.to_string_lossy().to_string();
