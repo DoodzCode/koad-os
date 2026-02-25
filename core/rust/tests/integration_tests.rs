@@ -68,3 +68,47 @@ fn test_query_limits() {
     cmd.arg("query").arg("").arg("--limit").arg("2");
     cmd.assert().success();
 }
+
+#[test]
+fn test_boot_basic() {
+    let mut cmd = Command::cargo_bin("koad").unwrap();
+    cmd.arg("boot");
+    cmd.assert()
+        .success()
+        .stdout(predicate::str::contains("<koad_boot>"))
+        .stdout(predicate::str::contains("Identity:"));
+}
+
+#[test]
+fn test_remember_cycle() {
+    let mut cmd = Command::cargo_bin("koad").unwrap();
+    cmd.arg("remember").arg("fact").arg("Integrations are fun").arg("--tags").arg("test-tag");
+    cmd.assert()
+        .success()
+        .stdout(predicate::str::contains("Memory updated."));
+
+    let mut cmd = Command::cargo_bin("koad").unwrap();
+    cmd.arg("query").arg("Integrations are fun");
+    cmd.assert()
+        .success()
+        .stdout(predicate::str::contains("fact"))
+        .stdout(predicate::str::contains("Integrations are fun"));
+}
+
+#[test]
+fn test_guide_list() {
+    let mut cmd = Command::cargo_bin("koad").unwrap();
+    cmd.arg("guide");
+    cmd.assert()
+        .success()
+        .stdout(predicate::str::contains("--- KoadOS Developer & Onboarding Guides ---"));
+}
+
+#[test]
+fn test_guide_topic() {
+    let mut cmd = Command::cargo_bin("koad").unwrap();
+    cmd.arg("guide").arg("onboarding");
+    cmd.assert()
+        .success()
+        .stdout(predicate::str::contains("# KoadOS: Your First 15 Minutes"));
+}

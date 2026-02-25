@@ -761,8 +761,17 @@ fn run_diagnostic(full: bool, config: &KoadConfig) -> Result<()> {
         // Notion (Optional)
         if config.notion.mcp {
             println!("[PASS] Notion Integration: Enabled (MCP)");
+            if env::var("NOTION_TOKEN").is_err() { println!("[WARN] NOTION_TOKEN is not set. Notion sync will fail."); }
+            if env::var("KOAD_STREAM_DB_ID").is_err() { println!("[WARN] KOAD_STREAM_DB_ID is not set. Stream posts will fail."); }
         } else {
             println!("[INFO] Notion Integration: Not Enabled (Optional)");
+        }
+
+        // Airtable (Optional)
+        if env::var("AIRTABLE_KOAD_PAT").is_ok() {
+            println!("[PASS] Airtable Integration: Auth set");
+        } else {
+            println!("[INFO] Airtable Integration: AIRTABLE_KOAD_PAT not set (Optional)");
         }
 
         let current_dir = env::current_dir()?;
@@ -1015,8 +1024,25 @@ fn main() -> Result<()> {
         Commands::Init { force } => {
             if !is_admin { anyhow::bail!("Admin only."); }
             let p = KoadConfig::get_path()?;
-            if p.exists() && !force { anyhow::bail!("Exists."); }
-            KoadConfig::default_initial().save()?; println!("Initialized.");
+            if p.exists() && !force { anyhow::bail!("Configuration already exists at {}. Use --force to overwrite.", p.display()); }
+            
+            // If file exists and we are forcing, we might want to preserve some things?
+            // Actually, for a clean install, overwriting is fine. 
+            // The issue is koad-setup.sh generates a koad.json then calls init --force.
+            // Let's make koad-setup.sh skip generating if it's going to call init anyway,
+            // OR make init load existing if it exists.
+            
+            let config_to_save = if p.exists() {
+                let mut existing = KoadConfig::load()?;
+                // Ensure version is updated
+                existing.version = "2.4".into();
+                existing
+            } else {
+                KoadConfig::default_initial()
+            };
+            
+            config_to_save.save()?; 
+            println!("Initialized.");
         }
         Commands::Harvest { path, git } => {
             if !has_privileged_access { anyhow::bail!("Access Denied."); }
@@ -1223,6 +1249,9 @@ fn main() -> Result<()> {
             for (content, cat, ts) in items { println!("[{}] ({}) {}", cat.to_uppercase(), ts, content); }
         }
         Commands::Dispatch { command, args } => {
+            if !config.preferences.booster_enabled {
+                println!("[WARN] Cognitive Booster is disabled in koad.json. Commands will be queued but not executed until 'koad serve' is running.");
+            }
             db.dispatch(&command, args)?;
             println!("Command dispatched to Koad Spine.");
         }
@@ -1264,4 +1293,29 @@ fn main() -> Result<()> {
         }
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::path::Path;
+
+    #[test]
+    fn test_detect_context_tags() {
+        let path = Path::new("/tmp/some-rust-project/Cargo.toml");
+        let tags = detect_context_tags(path);
+        assert!(tags.contains(&"rust".to_string()));
+        
+        let path = Path::new("/tmp/some-node-project/package.json");
+        let tags = detect_context_tags(path);
+        assert!(tags.contains(&"node".to_string()));
+    }
+
+    #[test]
+    fn test_gh_pat_resolution() {
+        let path = Path::new("/any/path");
+        let (var, label) = get_gh_pat_for_path(path);
+        assert_eq!(var, "GITHUB_PERSONAL_PAT");
+        assert_eq!(label, "Personal");
+    }
 }

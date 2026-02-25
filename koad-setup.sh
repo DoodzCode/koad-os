@@ -134,7 +134,7 @@ fi
 
 # 7. Initialize Database
 echo "Initializing SQLite database..."
-./bin/koad init
+./bin/koad init --force
 
 # 8. Final Configuration Instructions
 echo "--- Installation Complete ---"

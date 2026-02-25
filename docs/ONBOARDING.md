@@ -3,13 +3,18 @@
 Welcome to **KoadOS**, a programmatic-first AI engineering partner. This guide will walk you through setting up your first session and establishing a baseline for your partnership.
 
 ## 1. Installation
-Ensure you have **Rust** and **Python 3** installed.
+Ensure you have **Rust**, **Python 3**, and **Node.js** installed. The installer will perform a pre-check to verify these are available.
 
 ```bash
 git clone <your-fork-url> ~/.koad-os
 cd ~/.koad-os
 ./koad-setup.sh --partner "YourName" --persona "Koad" --role "Partner" --langs "Rust,Python,Node.js"
 ```
+
+### During Installation:
+- **Pre-checks**: The script will verify your system tools. If essential tools (Git, Cargo, Python) are missing, the installation will abort.
+- **Cognitive Booster**: You will be asked if you want to install the background daemon for file tracking.
+- **Git Identity**: If not already configured, you'll' be prompted to set a basic Git name and email for the `koad publish` command.
 
 ## 2. Environment Setup
 Add the binary to your path and set your API keys:
