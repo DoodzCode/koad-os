@@ -1,52 +1,37 @@
-# KoadOS v2.0 (Lean Edition)
+# KoadOS: The AI Software Engineering Partner
 
-The Agnostic AI Coding Agent Framework.
+**KoadOS** is an open-source, programmatic-first framework for building a long-term, context-aware partnership between a developer and an AI agent. 
 
-## Setup Instructions
+It acts as an **Operating System for your Agent**, providing a persistent memory (SQLite), a background cognitive booster (Rust Daemon), and an extensible skill system (Python/JS).
 
-1. **Clone & Personalize**:
-   ```bash
-   git clone <your-repo-url> ~/.koad-os
-   cd ~/.koad-os
-   ```
+## 🚀 Key Features
 
-2. **Environment Variables**:
-   Add these to your `.bashrc` or `.zshrc` to personalize the persona without editing the code:
-   ```bash
-   export KOAD_NAME="Your Name"
-   export KOAD_ROLE="Your Title"
-   export KOAD_BIO="Your background and mission."
-   export KOAD_HOME="$HOME/.koad-os"
-   ```
+- **Contextual Boot**: Instantly inject identity, project state, and relevant facts into your AI agent's context window.
+- **Surgical Search**: Retrieve only the most relevant knowledge to minimize token usage and maximize reasoning accuracy.
+- **Background Booster**: A Rust-based daemon tracks file changes and summarizes local activity in real-time.
+- **Standardized Skills**: Extend Koad's capabilities with simple scripts that can interface with GCloud, Notion, Airtable, and more.
 
-3. **Build the CLI**:
-   ```bash
-   cd core/rust
-   cargo build --release
-   ```
+## 🛠️ Getting Started
 
-4. **Initialize Memory**:
-   ```bash
-   # Create your local koad.json (ignored by git)
-   ./target/release/koad init
-   ```
+To install KoadOS and initialize your first partner, follow our **[Onboarding Guide](docs/ONBOARDING.md)**.
 
-5. **Link the Binary**:
-   ```bash
-   sudo ln -s ~/.koad-os/core/rust/target/release/koad /usr/local/bin/koad
-   ```
+```bash
+git clone https://github.com/DoodzCode/koad-os.git ~/.koad-os
+cd ~/.koad-os
+./koad-setup.sh --partner "YourName" --persona "Koad" --role "Partner" --langs "Rust,Python,Node.js"
+```
 
-## Core Mandate
-- **Boot**: `koad boot` (Ingests persona + recent memory + active reflections)
-- **Scan**: `koad scan` (Registers the current directory as a project in the database)
-- **Ponder**: `koad ponder` (Records a personal reflection in the Persona Journal)
-- **Publish**: `koad publish` (Stages, commits, and pushes KoadOS to GitHub)
-- **Saveup**: `koad saveup "summary" --auto` (Archives session and auto-harvests facts from successful actions)
-- **Remember**: `koad remember fact/learning "<text>"` (Updates global memory)
-- **Skill**: `koad skill run <path>` (Dispatches automation)
-- **Gcloud**: `koad gcloud audit` (Performs operational checks and broadcasts to Notion stream)
+## 📖 Documentation
 
-## Principles
-- **Simplicity first**: Minimal abstractions, maximum speed.
-- **Native tech**: Prioritize Rust, Node.js, and Python.
-- **Sanctuary Rule**: Developer agents are restricted to project files and documentation.
+- **[Onboarding](docs/ONBOARDING.md)**: Your first 15 minutes.
+- **[Developer Guide](docs/DEVELOPMENT.md)**: How to write skills and contribute to the core.
+- **[Architecture](docs/ARCHITECTURE.md)**: Deep dive into the Spine, Memory, and Drivers.
+- **[Technical Spec](SPEC.md)**: Full CLI reference and database schema.
+
+## 🤝 Contributing
+
+We welcome contributions! Whether you're adding a new global skill or improving the Rust core, please check our **[Developer Guide](docs/DEVELOPMENT.md)** to get started.
+
+## ⚖️ License
+
+MIT License. See [LICENSE.md](LICENSE.md) for details. (Drafting soon!)
