@@ -4,16 +4,18 @@ import subprocess
 import argparse
 from pathlib import Path
 
+import os
+
 def main():
     parser = argparse.ArgumentParser(description="KoadOS Script Validator")
     parser.add_argument("action", choices=["list", "check"])
     parser.add_argument("--path", help="Path to the script to check")
     
     args = parser.parse_args()
-    base_dir = Path("/home/ideans/data/skylinks/skylinks-scripts/src")
+    base_dir = Path(os.getenv("KOAD_SCRIPTS_DIR", "."))
 
     if args.action == "list":
-        print("Inventory of Skylinks Scripts (Optimized via fd):")
+        print(f"Inventory of Scripts in {base_dir.absolute()} (via fd):")
         # Use fd-find for fast recursive listing
         result = subprocess.run(
             ["fdfind", ".", str(base_dir), "--type", "f", "--strip-cwd-prefix"],

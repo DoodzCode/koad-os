@@ -1,18 +1,22 @@
 #!/usr/bin/env python3
 import sys
 import subprocess
+import os
+from pathlib import Path
 import json
 
 def search_koad(query, limit=5):
     """
     Queries the KoadOS SQLite database with ranking and limit.
     """
+    koad_home = Path(os.getenv("KOAD_HOME", Path.home() / ".koad-os"))
+    koad_bin = koad_home / "bin" / "koad"
     print(f"--- KoadOS Surgical Search: '{query}' (Limit: {limit}) ---")
     
     try:
         # Run koad query with limit
         result = subprocess.run(
-            ["/home/ideans/.koad-os/bin/koad", "query", query, "--limit", str(limit)],
+            [str(koad_bin), "query", query, "--limit", str(limit)],
             capture_output=True,
             text=True,
             check=True

@@ -1,12 +1,14 @@
 #!/usr/bin/env python3
 import sys
+import os
 import subprocess
 import argparse
 from datetime import datetime
 from pathlib import Path
 
-KOAD_BIN = "/home/ideans/.koad-os/core/rust/target/release/koad"
-LOG_FILE = "/home/ideans/.koad-os/SESSION_LOG.md"
+KOAD_HOME = Path(os.getenv("KOAD_HOME", Path.home() / ".koad-os"))
+KOAD_BIN = KOAD_HOME / "bin" / "koad"
+LOG_FILE = KOAD_HOME / "SESSION_LOG.md"
 
 def run_koad(args):
     try:

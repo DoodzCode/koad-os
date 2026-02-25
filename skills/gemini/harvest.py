@@ -1,12 +1,15 @@
 #!/usr/bin/env python3
 import sys
 import subprocess
+import os
 from pathlib import Path
 
 def run_koad_command(args):
     """Executes a koad CLI command."""
+    koad_home = Path(os.getenv("KOAD_HOME", Path.home() / ".koad-os"))
+    koad_bin = koad_home / "bin" / "koad"
     try:
-        subprocess.run(["/home/ideans/.koad-os/bin/koad"] + args, check=True)
+        subprocess.run([str(koad_bin)] + args, check=True)
         return True
     except (subprocess.CalledProcessError, FileNotFoundError) as e:
         print(f"Error running koad command: {e}", file=sys.stderr)

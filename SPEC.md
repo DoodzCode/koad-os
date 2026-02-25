@@ -67,8 +67,7 @@
     - `download <id> [--dest <path>]`: Downloads a specific file.
     - `sync`: Syncs metadata/files to local cache.
 - **Authentication**: 
-    - `path.contains("skylinks")` -> `GDRIVE_SKYLINKS_TOKEN`
-    - Else -> `GDRIVE_PERSONAL_TOKEN`
+    - Defaults to `GDRIVE_PERSONAL_TOKEN`. Users can configure path-aware tokens in their environment.
 
 ### `koad harvest <path>`
 - **Purpose**: ADMIN/PM ONLY. Pulls discoveries from developer documentation.

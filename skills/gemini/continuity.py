@@ -2,10 +2,13 @@
 import sys
 import subprocess
 import os
+from pathlib import Path
 
 def run_koad(args):
+    koad_home = Path(os.getenv("KOAD_HOME", Path.home() / ".koad-os"))
+    koad_bin = koad_home / "bin" / "koad"
     try:
-        subprocess.run(["/home/ideans/.koad-os/bin/koad"] + args, check=True)
+        subprocess.run([str(koad_bin)] + args, check=True)
         return True
     except:
         return False

@@ -4,7 +4,10 @@ import json
 import sys
 
 def get_page_children(page_id):
-    token = os.getenv('NOTION_PAT')
+    token = os.getenv('NOTION_TOKEN') or os.getenv('NOTION_PAT')
+    if not token:
+        print("Error: NOTION_TOKEN environment variable not set.")
+        sys.exit(1)
     headers = {
         "Authorization": f"Bearer {token}",
         "Notion-Version": "2022-06-28"
@@ -16,7 +19,7 @@ def get_page_children(page_id):
     return []
 
 def archive_block(block_id):
-    token = os.getenv('NOTION_PAT')
+    token = os.getenv('NOTION_TOKEN') or os.getenv('NOTION_PAT')
     headers = {
         "Authorization": f"Bearer {token}",
         "Notion-Version": "2022-06-28"
@@ -25,7 +28,7 @@ def archive_block(block_id):
     requests.delete(url, headers=headers)
 
 def append_blocks(page_id, blocks):
-    token = os.getenv('NOTION_PAT')
+    token = os.getenv('NOTION_TOKEN') or os.getenv('NOTION_PAT')
     headers = {
         "Authorization": f"Bearer {token}",
         "Content-Type": "application/json",
@@ -37,10 +40,18 @@ def append_blocks(page_id, blocks):
     return response.status_code
 
 if __name__ == "__main__":
-    page_id = "30cfe8ec-ae8f-808b-8eff-fa75e1cb0572"
+    page_id = os.getenv("KOAD_PAGE_ID")
+    stream_db_id = os.getenv("KOAD_STREAM_DB_ID")
+    noti_page_id = os.getenv("NOTI_PAGE_ID")
+    projects_db_id = os.getenv("PROJECTS_DB_ID")
+    memories_db_id = os.getenv("MEMORIES_DB_ID")
+    
+    if not page_id:
+        print("Error: KOAD_PAGE_ID must be set.")
+        sys.exit(1)
     
     # 1. Archive existing content
-    print("Archiving old content...")
+    print(f"Archiving old content for page {page_id}...")
     children = get_page_children(page_id)
     for child in children:
         archive_block(child["id"])
@@ -124,7 +135,7 @@ if __name__ == "__main__":
             "type": "code",
             "code": {
                 "language": "yaml",
-                "rich_text": [{"type": "text", "text": {"content": "binary: ~/.koad-os/bin/koad\\nmemory: ~/.koad-os/koad.db\\nconfig: ~/.koad-os/koad.json\\nstream: 310fe8ec-ae8f-80ba-9cbb-f31731d396d4"}}]
+                "rich_text": [{"type": "text", "text": {"content": f"binary: ~/.koad-os/bin/koad\\nmemory: ~/.koad-os/koad.db\\nconfig: ~/.koad-os/koad.json\\nstream: {stream_db_id or 'NOT_SET'}"}}]
             }
         },
         {
@@ -140,7 +151,7 @@ if __name__ == "__main__":
             "paragraph": {
                 "rich_text": [
                     {"type": "text", "text": {"content": "All asynchronous delegation between Koad (CLI) and Noti (Notion AI) occurs in the "}},
-                    {"type": "mention", "mention": {"type": "database", "database": {"id": "310fe8ec-ae8f-80ba-9cbb-f31731d396d4"}}}
+                    {"type": "mention", "mention": {"type": "database", "database": {"id": stream_db_id or '00000000-0000-0000-0000-000000000000'}}}
                 ]
             }
         },
@@ -155,35 +166,35 @@ if __name__ == "__main__":
             "object": "block",
             "type": "bulleted_list_item",
             "bulleted_list_item": {
-                "rich_text": [{"type": "text", "text": {"content": "koad: 30cfe8ec-ae8f-808b-8eff-fa75e1cb0572"}}]
+                "rich_text": [{"type": "text", "text": {"content": f"koad: {page_id}"}}]
             }
         },
         {
             "object": "block",
             "type": "bulleted_list_item",
             "bulleted_list_item": {
-                "rich_text": [{"type": "text", "text": {"content": "stream: 310fe8ec-ae8f-80ba-9cbb-f31731d396d4"}}]
+                "rich_text": [{"type": "text", "text": {"content": f"stream: {stream_db_id or 'NOT_SET'}"}}]
             }
         },
         {
             "object": "block",
             "type": "bulleted_list_item",
             "bulleted_list_item": {
-                "rich_text": [{"type": "text", "text": {"content": "noti: 295fe8ec-ae8f-805d-a0c8-e44bf3bbef0b"}}]
+                "rich_text": [{"type": "text", "text": {"content": f"noti: {noti_page_id or 'NOT_SET'}"}}]
             }
         },
         {
             "object": "block",
             "type": "bulleted_list_item",
             "bulleted_list_item": {
-                "rich_text": [{"type": "text", "text": {"content": "projects: 2b5cf778-395b-4ac8-8775-b6b80c3cdf2f"}}]
+                "rich_text": [{"type": "text", "text": {"content": f"projects: {projects_db_id or 'NOT_SET'}"}}]
             }
         },
         {
             "object": "block",
             "type": "bulleted_list_item",
             "bulleted_list_item": {
-                "rich_text": [{"type": "text", "text": {"content": "memories: ae366b72-8cd2-4da2-a242-a1f2d6cae343"}}]
+                "rich_text": [{"type": "text", "text": {"content": f"memories: {memories_db_id or 'NOT_SET'}"}}]
             }
         }
     ]

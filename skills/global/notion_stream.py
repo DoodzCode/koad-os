@@ -6,12 +6,15 @@ import json
 import argparse
 from datetime import datetime
 
-DATABASE_ID = "310fe8ec-ae8f-80ba-9cbb-f31731d396d4"
+DATABASE_ID = os.getenv("KOAD_STREAM_DB_ID")
 
 def get_headers():
-    token = os.getenv('NOTION_PAT')
+    token = os.getenv('NOTION_TOKEN') or os.getenv('NOTION_PAT')
     if not token:
-        print("Error: NOTION_PAT environment variable not set.")
+        print("Error: NOTION_TOKEN (or NOTION_PAT) environment variable not set.")
+        sys.exit(1)
+    if not DATABASE_ID:
+        print("Error: KOAD_STREAM_DB_ID environment variable not set.")
         sys.exit(1)
     return {
         "Authorization": f"Bearer {token}",

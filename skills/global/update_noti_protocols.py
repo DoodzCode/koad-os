@@ -4,7 +4,10 @@ import json
 import sys
 
 def append_blocks(page_id, blocks):
-    token = os.getenv('NOTION_PAT')
+    token = os.getenv('NOTION_TOKEN') or os.getenv('NOTION_PAT')
+    if not token:
+        print("Error: NOTION_TOKEN environment variable not set.")
+        sys.exit(1)
     headers = {
         "Authorization": f"Bearer {token}",
         "Content-Type": "application/json",
@@ -21,7 +24,12 @@ def append_blocks(page_id, blocks):
 
 if __name__ == "__main__":
     # Noti Agent OS page
-    page_id = "295fe8ec-ae8f-805d-a0c8-e44bf3bbef0b"
+    page_id = os.getenv("NOTI_PAGE_ID")
+    stream_db_id = os.getenv("KOAD_STREAM_DB_ID")
+    
+    if not page_id or not stream_db_id:
+        print("Error: NOTI_PAGE_ID and KOAD_STREAM_DB_ID must be set.")
+        sys.exit(1)
     
     blocks = [
         {
@@ -44,7 +52,7 @@ if __name__ == "__main__":
                         "type": "mention",
                         "mention": {
                             "type": "database",
-                            "database": {"id": "310fe8ec-ae8f-80ba-9cbb-f31731d396d4"}
+                            "database": {"id": stream_db_id}
                         }
                     }
                 ]

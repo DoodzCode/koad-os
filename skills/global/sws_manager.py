@@ -4,9 +4,11 @@ import subprocess
 import argparse
 from pathlib import Path
 
+import os
+
 # Config
-GCP_PROJECT = "skylinks-golf"
-REGION = "us-central1"
+GCP_PROJECT = os.getenv("GCP_PROJECT", "default-project")
+REGION = os.getenv("GCP_REGION", "us-central1")
 
 def run_cmd(cmd, cwd=None):
     print(f"Executing: {' '.join(cmd)}")
@@ -18,16 +20,17 @@ def run_cmd(cmd, cwd=None):
 def main():
     parser = argparse.ArgumentParser(description="KoadOS SWS Deployment Dispatcher")
     parser.add_argument("action", choices=["run", "deploy", "list"])
-    parser.add_argument("--name", help="Name of the function (e.g. sws-fetchEventBlocks)")
+    parser.add_argument("--name", help="Name of the function")
     
     args = parser.parse_args()
-    base_dir = Path("/home/ideans/data/skylinks/functions/src")
+    base_dir = Path(os.getenv("SWS_FUNCTIONS_DIR", "."))
 
     if args.action == "list":
-        print("Available SWS Functions:")
-        for d in base_dir.iterdir():
-            if d.is_dir():
-                print(f"- {d.name}")
+        print(f"Available SWS Functions in {base_dir.absolute()}:")
+        if base_dir.exists():
+            for d in base_dir.iterdir():
+                if d.is_dir():
+                    print(f"- {d.name}")
         return
 
     if not args.name:

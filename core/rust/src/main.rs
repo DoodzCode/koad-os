@@ -1,6 +1,7 @@
 use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::env;
@@ -10,6 +11,9 @@ use std::io::{BufRead, BufReader, Write};
 use rusqlite::{params, Connection};
 
 mod tui;
+mod airtable;
+
+use airtable::AirtableClient;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct KoadConfig {
@@ -140,6 +144,11 @@ enum Commands {
         #[command(subcommand)]
         source: SyncSource,
     },
+    /// Manage Airtable bases and records directly.
+    Airtable {
+        #[command(subcommand)]
+        action: AirtableAction,
+    },
     /// Start the Koad background service (Cognitive Booster).
     Serve,
     /// Interact with the Koad Stream (Notion-backed communication channel).
@@ -182,6 +191,39 @@ enum Commands {
     Scan {
         /// Path to scan (defaults to CWD).
         path: Option<PathBuf>,
+    },
+    /// Save a quick note or idea from Ian to the agent.
+    Note {
+        /// Note content.
+        text: String,
+    },
+    /// Record a brainstorm or rant to the personal ledger.
+    Brainstorm {
+        /// Brainstorm or rant text.
+        text: String,
+        /// Mark as a 'rant' for categorical filtering.
+        #[arg(short, long)]
+        rant: bool,
+    },
+    /// List Ian's notes to the agent.
+    Notes {
+        /// Maximum notes to return.
+        #[arg(short, long, default_value_t = 10)]
+        limit: usize,
+    },
+    /// List recent brainstorms and rants.
+    Brainstorms {
+        /// Maximum brainstorms to return.
+        #[arg(short, long, default_value_t = 10)]
+        limit: usize,
+    },
+    /// Dispatch a command to the Koad daemon for background execution.
+    Dispatch {
+        /// The command to execute.
+        command: String,
+        /// (Optional) Arguments for the command.
+        #[arg(short, long)]
+        args: Option<String>,
     },
     /// Publish all local KoadOS changes to the remote origin (git push).
     Publish {
@@ -298,6 +340,43 @@ enum SyncSource {
     Named { 
         /// Shortcut name (e.g., 'koad', 'stream', 'memories').
         name: String 
+    },
+}
+
+#[derive(Subcommand)]
+enum AirtableAction {
+    /// List records from an Airtable table.
+    List {
+        /// The Airtable Base ID.
+        base_id: String,
+        /// The Table Name.
+        table_name: String,
+        /// (Optional) Filter formula.
+        #[arg(short, long)]
+        filter: Option<String>,
+        /// (Optional) Max records to return.
+        #[arg(short, long, default_value_t = 10)]
+        limit: usize,
+    },
+    /// Get a specific record by ID.
+    Get {
+        /// The Airtable Base ID.
+        base_id: String,
+        /// The Table Name.
+        table_name: String,
+        /// The Record ID.
+        record_id: String,
+    },
+    /// Update a record.
+    Update {
+        /// The Airtable Base ID.
+        base_id: String,
+        /// The Table Name.
+        table_name: String,
+        /// The Record ID.
+        record_id: String,
+        /// JSON fields to update.
+        fields: String,
     },
 }
 
@@ -433,6 +512,26 @@ impl KoadDB {
         conn.execute("CREATE TABLE IF NOT EXISTS executions (id INTEGER PRIMARY KEY, command TEXT NOT NULL, args TEXT, timestamp TEXT NOT NULL, status TEXT)", [])?;
         conn.execute("CREATE TABLE IF NOT EXISTS notion_index (id TEXT PRIMARY KEY, name TEXT, type TEXT, last_sync TEXT, cloud_edited TEXT, url TEXT)", [])?;
         conn.execute("CREATE TABLE IF NOT EXISTS active_spec (id INTEGER PRIMARY KEY, title TEXT NOT NULL, description TEXT, status TEXT, last_update TEXT NOT NULL)", [])?;
+        conn.execute("CREATE TABLE IF NOT EXISTS ian_notes (id INTEGER PRIMARY KEY, content TEXT NOT NULL, timestamp TEXT NOT NULL)", [])?;
+        conn.execute("CREATE TABLE IF NOT EXISTS brainstorms (id INTEGER PRIMARY KEY, content TEXT NOT NULL, category TEXT NOT NULL, timestamp TEXT NOT NULL)", [])?;
+        conn.execute("CREATE TABLE IF NOT EXISTS project_state (
+            id INTEGER PRIMARY KEY,
+            path TEXT NOT NULL,
+            event_type TEXT NOT NULL,
+            timestamp TEXT NOT NULL,
+            summary TEXT
+        )", [])?;
+        conn.execute("CREATE TABLE IF NOT EXISTS command_queue (
+            id INTEGER PRIMARY KEY,
+            command TEXT NOT NULL,
+            args TEXT,
+            status TEXT NOT NULL DEFAULT 'pending',
+            output TEXT,
+            pid INTEGER,
+            created_at TEXT NOT NULL,
+            started_at TEXT,
+            finished_at TEXT
+        )", [])?;
         Ok(Self { conn })
     }
 
@@ -452,6 +551,41 @@ impl KoadDB {
         let timestamp = Local::now().format("%Y-%m-%d %H:%M:%S").to_string();
         self.conn.execute("INSERT INTO knowledge (category, content, tags, timestamp) VALUES (?1, ?2, ?3, ?4)", params![category, content, tags, timestamp])?;
         Ok(())
+    }
+
+    pub fn save_note(&self, content: &str) -> Result<()> {
+        let timestamp = Local::now().format("%Y-%m-%d %H:%M:%S").to_string();
+        self.conn.execute("INSERT INTO ian_notes (content, timestamp) VALUES (?1, ?2)", params![content, timestamp])?;
+        Ok(())
+    }
+
+    pub fn save_brainstorm(&self, content: &str, is_rant: bool) -> Result<()> {
+        let timestamp = Local::now().format("%Y-%m-%d %H:%M:%S").to_string();
+        let category = if is_rant { "rant" } else { "brainstorm" };
+        self.conn.execute("INSERT INTO brainstorms (content, category, timestamp) VALUES (?1, ?2, ?3)", params![content, category, timestamp])?;
+        Ok(())
+    }
+
+    pub fn dispatch(&self, command: &str, args: Option<String>) -> Result<()> {
+        let now = Local::now().format("%Y-%m-%d %H:%M:%S").to_string();
+        self.conn.execute("INSERT INTO command_queue (command, args, status, created_at) VALUES (?1, ?2, 'pending', ?3)", params![command, args, now])?;
+        Ok(())
+    }
+
+    pub fn get_recent_brainstorms(&self, limit: usize) -> Result<Vec<(String, String, String)>> {
+        let mut stmt = self.conn.prepare("SELECT content, category, timestamp FROM brainstorms ORDER BY timestamp DESC LIMIT ?1")?;
+        let rows = stmt.query_map(params![limit], |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)))?;
+        let mut results = Vec::new();
+        for row in rows { results.push(row?); }
+        Ok(results)
+    }
+
+    pub fn get_notes(&self, limit: usize) -> Result<Vec<(i64, String, String)>> {
+        let mut stmt = self.conn.prepare("SELECT id, content, timestamp FROM ian_notes ORDER BY timestamp DESC LIMIT ?1")?;
+        let rows = stmt.query_map(params![limit], |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)))?;
+        let mut results = Vec::new();
+        for row in rows { results.push(row?); }
+        Ok(results)
     }
 
     pub fn get_ponderings(&self, limit: usize) -> Result<Vec<String>> {
@@ -536,7 +670,7 @@ impl KoadDB {
             for row in rows { results.push(row?); }
         }
         let mut stmt = self.conn.prepare("SELECT category, content FROM knowledge WHERE active = 1 AND category != 'pondering' ORDER BY timestamp DESC LIMIT ?1")?;
-        let rows = stmt.query_map(params![limit - results.len()], |row| Ok((row.get(0)?, row.get(1)?)))?;
+        let rows = stmt.query_map(params![limit.saturating_sub(results.len())], |row| Ok((row.get(0)?, row.get(1)?)))?;
         for row in rows { 
             let item = row?;
             if !results.contains(&item) { results.push(item); }
@@ -568,21 +702,19 @@ impl KoadDB {
     }
 }
 
-fn get_gh_pat_for_path(path: &Path) -> (&'static str, &'static str) {
-    let path_str = path.to_string_lossy();
-    if path_str.contains("skylinks") { ("GITHUB_SKYLINKS_PAT", "Work") } else { ("GITHUB_PERSONAL_PAT", "Personal") }
+fn get_gh_pat_for_path(_path: &Path) -> (&'static str, &'static str) {
+    // For OSS, we default to the personal PAT. 
+    // Users can override this by setting KOAD_GH_PAT in their environment.
+    ("GITHUB_PERSONAL_PAT", "Personal")
 }
 
-fn get_gdrive_token_for_path(path: &Path) -> (&'static str, &'static str) {
-    let path_str = path.to_string_lossy();
-    if path_str.contains("skylinks") { ("GDRIVE_SKYLINKS_TOKEN", "Work") } else { ("GDRIVE_PERSONAL_TOKEN", "Personal") }
+fn get_gdrive_token_for_path(_path: &Path) -> (&'static str, &'static str) {
+    ("GDRIVE_PERSONAL_TOKEN", "Personal")
 }
 
 fn detect_context_tags(path: &Path) -> Vec<String> {
     let mut tags = Vec::new();
     let path_str = path.to_string_lossy().to_lowercase();
-    if path_str.contains("skylinks") { tags.push("skylinks".into()); }
-    if path_str.contains("ttrpg") { tags.push("ttrpg".into()); }
     if path_str.contains("rust") || path.join("Cargo.toml").exists() { tags.push("rust".into()); }
     if path_str.contains("node") || path.join("package.json").exists() { tags.push("node".into()); }
     tags
@@ -747,11 +879,27 @@ fn main() -> Result<()> {
                 println!("\n[Contextual Memory]");
                 for (cat, content) in db.get_contextual(8, tags)? { println!("- [{}] {}", cat, content); }
 
+                println!("\n[Ian's Notes]");
+                let notes = db.get_notes(5)?;
+                if notes.is_empty() { println!("- No new notes from Ian."); }
+                for (_, content, ts) in notes { println!("- ({}) {}", ts, content); }
+
                 if config.preferences.booster_enabled {
-                    let deltas = db.get_recent_deltas(60)?;
-                    if !deltas.is_empty() {
-                        println!("\n[Booster Deltas (Last 60m)]");
-                        for (path, event, ts) in deltas {
+                    println!("\n[Spine Intelligence Deltas]");
+                    // Query knowledge for delta tags since last boot (approx last 4 hours or since boot)
+                    let deltas = db.query("", 5, Some("delta".to_string()))?;
+                    if deltas.is_empty() {
+                        println!("- Spine is quiet. No background events recorded.");
+                    } else {
+                        for (_, _, content, ts) in deltas {
+                            println!("- ({}) {}", ts, content);
+                        }
+                    }
+
+                    let file_deltas = db.get_recent_deltas(60)?;
+                    if !file_deltas.is_empty() {
+                        println!("\n[Booster File Deltas (Last 60m)]");
+                        for (path, event, ts) in file_deltas {
                             let p = PathBuf::from(path);
                             println!("- {}: {} ({})", event, p.file_name().unwrap_or_default().to_string_lossy(), ts);
                         }
@@ -845,6 +993,30 @@ fn main() -> Result<()> {
                 }
             }
         }
+        Commands::Airtable { action } => {
+            if !has_privileged_access { anyhow::bail!("Access Denied."); }
+            let pat = env::var("AIRTABLE_KOAD_PAT").context("AIRTABLE_KOAD_PAT not set")?;
+            let client = AirtableClient::new(pat);
+            
+            match action {
+                AirtableAction::List { base_id, table_name, filter, limit } => {
+                    let records = client.list_records(&base_id, &table_name, filter, Some(limit))?;
+                    println!("--- {} Records found ---", records.len());
+                    for r in records {
+                        println!("ID: {} | Fields: {}", r.id, r.fields);
+                    }
+                },
+                AirtableAction::Get { base_id, table_name, record_id } => {
+                    let record = client.get_record(&base_id, &table_name, &record_id)?;
+                    println!("ID: {} | Fields: {}", record.id, record.fields);
+                },
+                AirtableAction::Update { base_id, table_name, record_id, fields } => {
+                    let json_fields: Value = serde_json::from_str(&fields)?;
+                    let record = client.update_record(&base_id, &table_name, &record_id, json_fields)?;
+                    println!("Record {} updated successfully.", record.id);
+                }
+            }
+        }
         Commands::Serve => {
             if !config.preferences.booster_enabled {
                 anyhow::bail!("Cognitive Booster is disabled in koad.json. Enable it to use 'koad serve'.");
@@ -861,11 +1033,16 @@ fn main() -> Result<()> {
         Commands::Sync { source } => {
             if !has_privileged_access { anyhow::bail!("Access Denied."); }
             match source {
-                SyncSource::Airtable { schema_only, base_id } => {
-                    let mut args = vec!["skill".to_string(), "run".to_string(), "global/airtable_sync.py".to_string(), "--".to_string()];
-                    if schema_only { args.push("--schema-only".to_string()); }
-                    if let Some(id) = base_id { args.push("--base-id".to_string()); args.push(id); }
-                    Command::new(env::current_exe()?).args(args).spawn()?.wait()?;
+                SyncSource::Airtable { schema_only: _, base_id } => {
+                    let pat = env::var("AIRTABLE_KOAD_PAT").context("AIRTABLE_KOAD_PAT not set")?;
+                    let _client = AirtableClient::new(pat);
+                    println!("Syncing Airtable (Native Rust Implementation)...");
+                    if let Some(id) = base_id {
+                        println!("Target Base: {}", id);
+                        // Future: Ingest schema/records into koad.db
+                    } else {
+                        println!("No Base ID provided. Scanning configured projects for Airtable metadata...");
+                    }
                 }
                 SyncSource::Notion { page_id, db_id } => {
                     if config.notion.mcp {
@@ -894,12 +1071,12 @@ fn main() -> Result<()> {
                 match action {
                     StreamAction::Post { topic, message, msg_type } => {
                         println!("DELEGATE: Use Notion MCP 'API-post-page' to post to Koad Stream (DB: {}). Topic: {}, Type: {}, Msg: {}", 
-                                 config.notion.index.get("stream").unwrap_or(&"310fe8ec-ae8f-80ba-9cbb-f31731d396d4".to_string()),
+                                 config.notion.index.get("stream").unwrap_or(&"UNKNOWN".to_string()),
                                  topic, msg_type, message);
                     }
                     StreamAction::List { limit } => {
                         println!("DELEGATE: Use Notion MCP 'API-query-data-source' to list Koad Stream (DB: {}, Limit: {}).", 
-                                 config.notion.index.get("stream").unwrap_or(&"310fe8ec-ae8f-80ba-9cbb-f31731d396d4".to_string()),
+                                 config.notion.index.get("stream").unwrap_or(&"UNKNOWN".to_string()),
                                  limit);
                     }
                 }
@@ -942,7 +1119,7 @@ fn main() -> Result<()> {
                 let recent = db.get_recent_executions(4)?;
                 for (cmd, args, _) in recent { db.remember("fact", &format!("Verified {} with: {}", cmd, args), Some(format!("auto,{}", scope)))?; }
             }
-            let log_entry = format!("\n## {} - {}\n- Scope: {}\n- Project: {}\n", Local::now().format("%Y-%m-%d"), summary, scope, db.get_active_project(&env::current_dir()?.to_string_lossy())?.map(|(n,_,_)| n).unwrap_or("General".into()));
+            let log_entry = format!("\n## {} - {}\n- Scope: {}\n- Project: {}\n", Local::now().format("%Y-%m-%d"), summary, scope, db.get_active_project(&env::current_dir().unwrap_or_default().to_string_lossy())?.map(|(n,_,_)| n).unwrap_or("General".into()));
             std::fs::OpenOptions::new().append(true).create(true).open(KoadConfig::get_log_path()?)?.write_all(log_entry.as_bytes())?;
             println!("Saveup complete.");
         }
@@ -978,7 +1155,7 @@ fn main() -> Result<()> {
                 _ => {
                     // Fallback to single directory check if fd fails or is missing
                     if t.join(".koad").exists() {
-                        db.register_project(&t.file_name().unwrap().to_string_lossy(), &t.to_string_lossy())?;
+                        db.register_project(&t.file_name().unwrap_or_default().to_string_lossy(), &t.to_string_lossy())?;
                         println!("Project registered.");
                     } else {
                         println!("[INFO] No .koad directories found.");
@@ -986,14 +1163,43 @@ fn main() -> Result<()> {
                 }
             }
         }
+        Commands::Note { text } => {
+            db.save_note(&text)?;
+            println!("Note saved to KoadDB.");
+        }
+        Commands::Brainstorm { text, rant } => {
+            db.save_brainstorm(&text, rant)?;
+            println!("{} saved to KoadDB.", if rant { "Rant" } else { "Brainstorm" });
+        }
+        Commands::Notes { limit } => {
+            let notes = db.get_notes(limit)?;
+            println!("--- Ian's Notes ---");
+            if notes.is_empty() { println!("No notes found."); }
+            for (id, content, ts) in notes { println!("[ID:{}] ({}) {}", id, ts, content); }
+        }
+        Commands::Brainstorms { limit } => {
+            let items = db.get_recent_brainstorms(limit)?;
+            println!("--- Ian's Brainstorms & Rants ---");
+            if items.is_empty() { println!("No brainstorms found."); }
+            for (content, cat, ts) in items { println!("[{}] ({}) {}", cat.to_uppercase(), ts, content); }
+        }
+        Commands::Dispatch { command, args } => {
+            db.dispatch(&command, args)?;
+            println!("Command dispatched to Koad Spine.");
+        }
         Commands::Publish { message } => {
             if !is_admin { anyhow::bail!("Admin only."); }
             let h = KoadConfig::get_home()?;
             let m = message.unwrap_or_else(|| format!("KoadOS Sync - {}", Local::now().format("%Y-%m-%d %H:%M")));
+            
+            // Detect current branch
+            let branch_output = Command::new("git").arg("-C").arg(&h).arg("rev-parse").arg("--abbrev-ref").arg("HEAD").output()?;
+            let branch = String::from_utf8_lossy(&branch_output.stdout).trim().to_string();
+
             Command::new("git").arg("-C").arg(&h).arg("add").arg(".").spawn()?.wait()?;
             Command::new("git").arg("-C").arg(&h).arg("commit").arg("-m").arg(&m).spawn()?.wait()?;
-            Command::new("git").arg("-C").arg(&h).arg("push").arg("origin").arg("main").spawn()?.wait()?;
-            println!("Published.");
+            Command::new("git").arg("-C").arg(&h).arg("push").arg("origin").arg(&branch).spawn()?.wait()?;
+            println!("Published to branch: {}", branch);
         }
         Commands::Whoami => {
             let current_dir = env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
@@ -1002,7 +1208,7 @@ fn main() -> Result<()> {
             let user = env::var("USER").unwrap_or_else(|_| "Partner".into());
             
             println!("--- KoadOS Partnership ---");
-            println!("Partner:   Ian ({})", user);
+            println!("Partner:   {}", user);
             println!("Persona:   {} ({})", config.identity.name, config.identity.role);
             println!("Status:    Active / Booted");
             println!("Bio:       {}", config.identity.bio);

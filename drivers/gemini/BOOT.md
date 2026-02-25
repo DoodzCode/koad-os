@@ -3,7 +3,7 @@
 ## Notion MCP Integration
 The Notion CLI commands (`koad stream`, `koad sync notion`) are now reconfigured to prefer the **Notion MCP Connection**.
 - When asked to post to the Koad Stream, use the `API-post-page` or `API-patch-block-children` tools.
-- Koad Stream Database ID: `310fe8ec-ae8f-80ba-9cbb-f31731d396d4`
+- Koad Stream Database ID: (Find 'stream_db' in your `koad.json` notion.index)
 - Use the `notion.index` in `koad.json` to find other relevant IDs.
 
 ## Core Directives

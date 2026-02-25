@@ -88,11 +88,20 @@ fi
 echo "Initializing SQLite database..."
 ./bin/koad init
 
+# 7. Final Configuration Instructions
 echo "--- Installation Complete ---"
 echo "Partner: $PARTNER"
 echo "Persona: $PERSONA"
 echo ""
+echo "CRITICAL: The following environment variables are required for full functionality."
+echo "Please add them to your .bashrc, .zshrc, or .env file:"
+echo ""
+echo "export GITHUB_PERSONAL_PAT='your_github_pat'"
+echo "export NOTION_TOKEN='your_notion_token'"
+echo "export KOAD_HOME=\"\$HOME/.koad-os\""
+echo "export PATH=\"\$KOAD_HOME/bin:\$PATH\""
+echo ""
 echo "NEXT STEPS:"
-echo "1. Add the following to your .bashrc or .zshrc:"
-echo "   export PATH="\$HOME/.koad-os/bin:\$PATH""
+echo "1. Source your profile: 'source ~/.bashrc'"
 echo "2. Run 'koad boot' to awaken the persona."
+echo "3. Use 'koad sync notion --db-id <ID>' to initialize your Notion index."

@@ -4,7 +4,10 @@ import json
 import sys
 
 def get_page_content(page_id):
-    token = os.getenv('NOTION_PAT')
+    token = os.getenv('NOTION_TOKEN') or os.getenv('NOTION_PAT')
+    if not token:
+        print("Error: NOTION_TOKEN environment variable not set.")
+        sys.exit(1)
     headers = {
         "Authorization": f"Bearer {token}",
         "Notion-Version": "2022-06-28"
@@ -16,7 +19,10 @@ def get_page_content(page_id):
         return None
 
 if __name__ == "__main__":
-    page_id = "295fe8ec-ae8f-805d-a0c8-e44bf3bbef0b"
+    page_id = os.getenv('NOTI_PAGE_ID')
+    if not page_id:
+        print("Error: NOTI_PAGE_ID must be set.")
+        sys.exit(1)
     content = get_page_content(page_id)
     if content:
         print(json.dumps(content, indent=2))

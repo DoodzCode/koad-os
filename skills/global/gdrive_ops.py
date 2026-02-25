@@ -9,8 +9,7 @@ def main():
     args = parser.parse_args()
     
     # Determine token based on path (passed via env or logic)
-    token_skylinks = os.getenv('GDRIVE_SKYLINKS_TOKEN')
-    token_personal = os.getenv('GDRIVE_PERSONAL_TOKEN')
+    token = os.getenv('GDRIVE_PERSONAL_TOKEN')
     
     # Simulation of Drive API interaction
     print(f'Interacting with Google Drive (Action: {args.action})...')

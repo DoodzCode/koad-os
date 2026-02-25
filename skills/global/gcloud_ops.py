@@ -14,16 +14,14 @@ def main():
     parser.add_argument('action', choices=['list', 'deploy', 'logs', 'audit'])
     parser.add_argument('--resource', default='functions')
     parser.add_argument('--name', help="Resource name for logs or deploy")
-    parser.add_argument('--project', choices=['ops', 'golf', 'internal'], default='ops')
+    parser.add_argument('--project', help="GCP Project ID")
     parser.add_argument('--limit', type=int, default=20)
     args = parser.parse_args()
     
-    PROJECT_IDS = {
-        'ops': 'skylinks-operations',
-        'golf': 'skylinks-golf',
-        'internal': 'skylinks-internal'
-    }
-    project_id = PROJECT_IDS.get(args.project)
+    project_id = args.project or os.getenv("GCP_PROJECT")
+    if not project_id:
+        print("Error: GCP Project ID is required (via --project or GCP_PROJECT env var)")
+        sys.exit(1)
     
     # If the native koad CLI passed the resource directly as a positional arg (old style)
     # We handle it here for backward compatibility with the GcloudAction enum in main.rs
