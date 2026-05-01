@@ -18,49 +18,12 @@ if [ -z "$KOAD_RUNTIME" ]; then
     fi
 fi
 
-# agent-boot <name>
+# agent-boot <name> [args]
 # Boots an agent by hydrating the current shell with its identity and environment.
 # Must be called as a shell function (not a subprocess) to propagate env vars.
-# Runtime detection priority: current env > env signals > agent TOML config.
+# Boot logic is canonical in plugin/bin/agent-boot.sh — do not add logic here.
 function agent-boot() {
-    if [ -z "$1" ]; then
-        echo "[agent-boot] Usage: agent-boot <agent-name>"
-        return 1
-    fi
-
-    local _AGENT_LOWER=$(echo "$1" | tr '[:upper:]' '[:lower:]')
-    local _KOAD_HOME="$KOAD_HOME"
-    local _AGENT_TOML="$_KOAD_HOME/config/identities/${_AGENT_LOWER}.toml"
-    local _BRIEF_CACHE="$_KOAD_HOME/cache/session-brief-${_AGENT_LOWER}.md"
-
-    # 1. Fast Display: Show the last known state immediately
-    if [ -f "$_BRIEF_CACHE" ]; then
-        echo -e "\x1b[1;30m[QUICK-RESTORE] Loading last cached brief...\x1b[0m"
-        cat "$_BRIEF_CACHE"
-        echo -e "\x1b[1;30m-------------------------------------------\x1b[0m"
-    fi
-
-    if [ -z "$KOAD_RUNTIME" ]; then
-        if [ -n "$CLAUDE_CODE_ENTRYPOINT" ]; then
-            export KOAD_RUNTIME="claude"
-        elif [ -n "$GEMINI_API_KEY" ] || [ -n "$GOOGLE_GEMINI_API_KEY" ]; then
-            export KOAD_RUNTIME="gemini"
-        elif [ -f "$_AGENT_TOML" ]; then
-            local _rt
-            _rt=$(grep -E "^runtime[[:space:]]*=" "$_AGENT_TOML" | head -n1 | cut -d'"' -f2)
-            [ -n "$_rt" ] && export KOAD_RUNTIME="$_rt"
-        fi
-    fi
-
-    if [ -d "/usr/lib/wsl/lib" ]; then
-        if [[ ":$LD_LIBRARY_PATH:" != *":/usr/lib/wsl/lib:"* ]]; then
-            export LD_LIBRARY_PATH="/usr/lib/wsl/lib${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}"
-        fi
-    fi
-
-    # 2. Async Hydration: Perform heavy gRPC/Data work
-    # We use a subshell to capture the exports but keep the shell responsive
-    eval "$("$_KOAD_HOME/bin/koad-agent" boot "$1")"
+    source "$KOAD_HOME/bin/agent-boot.sh" "$@"
 }
 export -f agent-boot
 
