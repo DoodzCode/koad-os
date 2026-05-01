@@ -7,7 +7,7 @@ Use for: normal session open.
 1. Run the boot command:
 
 ```bash
-source /home/ideans/.citadel-jupiter/bin/koad-functions.sh && agent-boot <name>
+source "$KOAD_HOME/bin/koad-functions.sh" && agent-boot <name>
 ```
 
 2. Run situational awareness:

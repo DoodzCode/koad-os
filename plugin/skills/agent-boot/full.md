@@ -7,7 +7,7 @@ Use for: start of a new major session, post-incident recovery, inter-agent hando
 1. Run the boot command:
 
 ```bash
-source /home/ideans/.citadel-jupiter/bin/koad-functions.sh && agent-boot <name>
+source "$KOAD_HOME/bin/koad-functions.sh" && agent-boot <name>
 ```
 
 2. Run situational awareness:

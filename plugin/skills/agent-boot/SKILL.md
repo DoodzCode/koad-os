@@ -20,7 +20,7 @@ agent-boot <name> --full    # boot + orient + tasks + Condition Green
 Run the following Bash command (must run in the terminal — not a subprocess):
 
 ```bash
-source /home/ideans/.citadel-jupiter/bin/koad-functions.sh && agent-boot <name>
+source "$KOAD_HOME/bin/koad-functions.sh" && agent-boot <name>
 ```
 
 Replace `<name>` with the target agent (e.g., `clyde`, `tyr`).
