@@ -141,6 +141,13 @@ else
     warn "scripts/koad-functions.sh not found."
 fi
 
+if [[ -f "plugin/bin/agent-boot.sh" ]]; then
+    cp plugin/bin/agent-boot.sh "$BIN_DIR/agent-boot.sh"
+    ok "agent-boot.sh installed to $BIN_DIR"
+else
+    warn "plugin/bin/agent-boot.sh not found."
+fi
+
 # 6. Binary Installation (Final Check)
 CURRENT_STEP="Binary Installation"
 section "Binary Installation"
