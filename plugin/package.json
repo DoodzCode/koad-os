@@ -1,5 +1,7 @@
 {
   "name": "koad-agents",
   "version": "1.0.0",
-  "type": "module"
+  "description": "KoadOS agent boot skill — session hydration for KoadOS agents across Claude and Gemini CLI",
+  "type": "module",
+  "private": true
 }
