@@ -1,0 +1,8 @@
+{
+  "name": "koad-agents",
+  "description": "KoadOS agent session hydration. Boots named agents (tyr, clyde, cid) with identity, env vars, and situational orientation.",
+  "author": {
+    "name": "Fryymann",
+    "url": "https://github.com/Fryymann"
+  }
+}

@@ -39,6 +39,6 @@ services:
       - CASS_URL=http://cass:50052
       - QDRANT_URL=http://qdrant:6334
       - MCP_MODE=read_only
-      - AGENT_PARTITION=rook_${HOSTNAME}_${USER}
+      - AGENT_PARTITION=${AGENT_NAME:-agent}_${HOSTNAME}_${USER}
       - RUST_LOG=info
     restart: unless-stopped

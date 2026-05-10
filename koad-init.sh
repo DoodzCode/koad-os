@@ -180,6 +180,49 @@ else
     info "Then run: ${CYAN}code-review-graph init && code-review-graph build${RESET}"
 fi
 
+# 9. Claude Desktop Memory Agent (Optional)
+CURRENT_STEP="Claude Desktop Agent Setup"
+section "Claude Desktop Memory Agent (Optional)"
+info "KoadOS can run a local memory bridge for Claude Desktop."
+info "This gives your Claude Desktop agent persistent memory via CASS."
+
+SETUP_CLAUDE_AGENT=false
+if [[ -t 0 ]]; then
+    read -p "  Set up a Claude Desktop memory agent? [y/N]: " setup_agent_input
+    if [[ "$setup_agent_input" =~ ^[Yy]$ ]]; then
+        SETUP_CLAUDE_AGENT=true
+    fi
+fi
+
+if [[ "$SETUP_CLAUDE_AGENT" = true ]]; then
+    CLAUDE_AGENT_NAME=""
+    if [[ -t 0 ]]; then
+        read -p "  Enter a name for your Claude Desktop agent [Scout]: " CLAUDE_AGENT_NAME
+    fi
+    CLAUDE_AGENT_NAME="${CLAUDE_AGENT_NAME:-Scout}"
+
+    # Store in .env
+    if [[ -f "$KOAD_HOME/.env" ]]; then
+        if grep -q "KOADOS_CLAUDE_AGENT_NAME" "$KOAD_HOME/.env"; then
+            portable_sed "s|KOADOS_CLAUDE_AGENT_NAME=.*|KOADOS_CLAUDE_AGENT_NAME=$CLAUDE_AGENT_NAME|" "$KOAD_HOME/.env"
+        else
+            echo "KOADOS_CLAUDE_AGENT_NAME=$CLAUDE_AGENT_NAME" >> "$KOAD_HOME/.env"
+        fi
+        ok "Claude Desktop agent name '$CLAUDE_AGENT_NAME' saved to .env"
+    fi
+
+    echo ""
+    echo -e "${BOLD}To start your Claude Desktop memory agent:${RESET}"
+    echo -e "  ${CYAN}AGENT_NAME=\"$CLAUDE_AGENT_NAME\" ./docker/rook/rook-up.sh${RESET}"
+    echo ""
+    echo -e "Then add this to your ${BOLD}claude_desktop_config.json${RESET}:"
+    echo -e "  ${CYAN}\"mcpServers\": { \"$CLAUDE_AGENT_NAME\": { \"transport\": \"http\", \"url\": \"http://localhost:9742/mcp\" } }${RESET}"
+    echo ""
+    ok "Claude Desktop agent '$CLAUDE_AGENT_NAME' configured."
+else
+    info "Skipping Claude Desktop agent setup. Run './docker/rook/rook-up.sh' later to enable."
+fi
+
 CURRENT_STEP="Finalizing"
 section "Initialization Complete"
 info "Citadel '$CITADEL_NAME' is ready."

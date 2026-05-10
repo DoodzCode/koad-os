@@ -28,34 +28,49 @@ KoadOS works *with* your existing frontier agent tools:
 ## 🚀 Getting Started
 
 ### Prerequisites:
-*   **Rust** (Latest Stable)
-*   **Docker Desktop** (Running)
-*   **Python 3 & PIPX** (For graph tools)
+*   **Rust** (Latest Stable) — [rustup.rs](https://rustup.rs)
+*   **Docker** (Running) — Docker Desktop or Docker Engine + Compose plugin
+*   **Python 3 & pipx** — `sudo apt install python3-pip pipx` on Ubuntu/WSL
+*   **protoc** — `sudo apt install protobuf-compiler` on Ubuntu/WSL
 
 ### 1. Installation
 ```bash
 # Clone the monorepo
-git clone git@github.com-fryymann:Fryymann/koad-os ~/koados-citadel
+git clone https://github.com/DoodzCode/koad-os.git ~/koados-citadel
 cd ~/koados-citadel
 
 # Build backend infrastructure and host binaries
+# (also installs code-review-graph via pipx)
 ./install.sh
 ```
 
 ### 2. Initialization ("The Great Awakening")
 ```bash
-# Set up your Citadel name and initial Captain agent
+# Set up your Citadel name, identity, and optional Claude Desktop agent
 ./koad-init.sh
 ```
 
 ### 3. Commanding the Crew
 ```bash
-# Add KoadOS to your shell
-source ~/.koad-os/bin/koad-functions.sh
+# Add KoadOS to your shell (~/.bashrc or ~/.zshrc)
+export KOADOS_HOME="$HOME/.koad-os"
+export PATH="$KOADOS_HOME/bin:$PATH"
+source $KOADOS_HOME/bin/koad-functions.sh
+
+# Reload shell
+source ~/.bashrc
 
 # Boot your Captain to begin operations
 agent-boot captain
 ```
+
+### 4. Claude Desktop Memory Agent (Optional)
+If you opted in during `koad-init.sh`, start your memory agent:
+```bash
+cd ~/koados-citadel
+./docker/rook/rook-up.sh
+```
+Then add the printed config snippet to your `claude_desktop_config.json`.
 
 ---
 

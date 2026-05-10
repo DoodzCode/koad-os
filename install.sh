@@ -74,22 +74,24 @@ fi
 check_cmd "python3" "Python 3"
 check_cmd "pipx" "pipx"
 
-# 1.1 specialized check for code-review-graph
-if command -v "code-review-graph" &>/dev/null; then
-    ok "code-review-graph found ($(command -v "code-review-graph"))"
-else
-    fail "code-review-graph not found."
-    info "Please install it via pipx: ${BOLD}pipx install code-review-graph${RESET}"
-    ERRORS=$((ERRORS + 1))
-fi
-
 if [[ $ERRORS -gt 0 ]]; then
     echo
     fail "$ERRORS prerequisite(s) missing. Fix the above and re-run $0."
     exit 1
 fi
 
-# 2. Infrastructure Boot
+# 2. Install Graph Tools
+CURRENT_STEP="Graph Tools Installation"
+section "Graph Tools Installation"
+if command -v "code-review-graph" &>/dev/null; then
+    ok "code-review-graph already installed ($(command -v "code-review-graph"))"
+else
+    info "Installing code-review-graph via pipx..."
+    pipx install code-review-graph
+    ok "code-review-graph installed."
+fi
+
+# 3. Infrastructure Boot
 CURRENT_STEP="Infrastructure Boot"
 section "Infrastructure Boot (Docker)"
 info "Starting CASS, Redis, and Qdrant..."
@@ -100,14 +102,14 @@ else
 fi
 ok "Infrastructure is running in the background."
 
-# 3. Host Binary Compilation
+# 4. Host Binary Compilation
 CURRENT_STEP="Binary Compilation"
 section "Host Binary Compilation (Rust)"
 info "Building 'koad' and 'koad-agent' in release mode..."
 cargo build --release --bin koad --bin koad-agent
 ok "Binaries compiled successfully."
 
-# 4. Next Steps
+# 5. Next Steps
 CURRENT_STEP="Finalizing"
 section "Installation Phase 1 Complete"
 info "Infrastructure is online and binaries are built."
