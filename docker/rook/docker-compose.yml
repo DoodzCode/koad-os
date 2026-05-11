@@ -23,6 +23,7 @@ services:
       - KOADOS_URL_REDIS=redis://redis:6379
       - KOADOS_URL_QDRANT=http://qdrant:6333
       - CASS_GRPC_PORT=50052
+      - KOAD__SYSTEM__VERSION=3.2
       - RUST_LOG=info
     volumes:
       - rook-cass-data:/app/data
