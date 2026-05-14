@@ -1,0 +1,3 @@
+[submodule "harness/opencode"]
+	path = harness/opencode
+	url = git@github.com:Fryymann/opencode.git
