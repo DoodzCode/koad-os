@@ -9,21 +9,27 @@ Boots a KoadOS agent: hydrates shell identity, exports env vars, and orients the
 
 ## Usage
 
-```
-agent-boot <name>           # standard (default)
-agent-boot <name> --quick   # boot only, no orientation
-agent-boot <name> --full    # boot + orient + tasks + Condition Green
+```bash
+agent-boot                  # use current $KOAD_AGENT_NAME (recommended)
+agent-boot <name>           # override with specific name
+agent-boot [name] --quick   # boot only, no orientation
+agent-boot [name] --full    # boot + orient + tasks + Condition Green
 ```
 
 ## How to Execute
 
-Run the following Bash command (must run in the terminal — not a subprocess):
+1. **Verify Identity:** Check for the `KOAD_AGENT_NAME` environment variable. 
+   - If set, use `agent-boot` without a name argument. 
+   - You SHOULD also check for `KOAD_AGENT_ROLE`, `KOAD_AGENT_RANK`, and `KOAD_AGENT_BIO` to establish your persona.
+   - If NOT set, or if you need to switch identities, run `--agentprep <name>` first, then run `agent-boot`.
+
+2. **Run Boot:** Execute the following Bash command:
 
 ```bash
-source "$KOAD_HOME/bin/koad-functions.sh" && agent-boot <name>
+source "$KOAD_HOME/bin/koad-functions.sh" && agent-boot
 ```
 
-Replace `<name>` with the target agent (e.g., `clyde`, `tyr`).
+(Append flags or name only if required by specific session needs).
 
 ## Boot Levels
 

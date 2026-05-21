@@ -7,7 +7,7 @@ Use for: start of a new major session, post-incident recovery, inter-agent hando
 1. Run the boot command:
 
 ```bash
-source "$KOAD_HOME/bin/koad-functions.sh" && agent-boot <name>
+source "$KOAD_HOME/bin/koad-functions.sh" && agent-boot
 ```
 
 2. Run situational awareness:
@@ -19,7 +19,7 @@ koad map look
 3. Check service health:
 
 ```bash
-koad system status
+koad system start && koad system auth
 ```
 
 4. Read open tasks from the agent vault:

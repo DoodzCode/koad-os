@@ -2,25 +2,30 @@
 //!
 //! Handles administrative and maintenance RPC calls, typically via a secure UDS.
 
+use koad_core::db::KoadDB;
 use koad_proto::citadel::v5::admin_server::Admin;
 use koad_proto::citadel::v5::*;
+use std::sync::Arc;
 use std::time::Instant;
 use tokio::sync::watch;
 use tonic::{Request, Response, Status};
-use tracing::{info, warn};
+use tracing::{error, info, warn};
 
 /// Service implementation for the `Admin` gRPC interface.
+#[derive(Clone)]
 pub struct AdminService {
     shutdown_tx: watch::Sender<bool>,
     start_time: Instant,
+    koad_db: Arc<KoadDB>,
 }
 
 impl AdminService {
     /// Creates a new `AdminService`.
-    pub fn new(shutdown_tx: watch::Sender<bool>) -> Self {
+    pub fn new(shutdown_tx: watch::Sender<bool>, koad_db: Arc<KoadDB>) -> Self {
         Self {
             shutdown_tx,
             start_time: Instant::now(),
+            koad_db,
         }
     }
 }
@@ -92,14 +97,36 @@ impl Admin for AdminService {
         request: Request<CommitKnowledgeRequest>,
     ) -> Result<Response<StatusResponse>, Status> {
         let req = request.into_inner();
-        info!("Admin: Commit knowledge requested");
 
-        // Logic would go here to persist to SQLite/Redis
-        Ok(Response::new(StatusResponse {
-            success: true,
-            message: "Knowledge committed (Placeholder)".to_string(),
-            context: req.context,
-        }))
+        // Derive agent name from session_id: "SID-clyde-abc123" → "clyde"
+        let agent_name = req.session_id
+            .splitn(3, '-')
+            .nth(1)
+            .unwrap_or("unknown")
+            .to_string();
+
+        info!(
+            agent = %agent_name,
+            category = %req.category,
+            "Admin: Commit knowledge requested"
+        );
+
+        let tags = if req.tags.is_empty() { None } else { Some(req.tags.clone()) };
+
+        match self.koad_db.remember(&req.category, &req.content, tags, 0, &agent_name) {
+            Ok(()) => {
+                info!(agent = %agent_name, category = %req.category, "Admin: Knowledge committed to koad.db");
+                Ok(Response::new(StatusResponse {
+                    success: true,
+                    message: format!("Knowledge ({}) committed to Citadel.", req.category),
+                    context: req.context,
+                }))
+            }
+            Err(e) => {
+                error!(error = %e, "Admin: Failed to commit knowledge to koad.db");
+                Err(Status::internal(format!("Knowledge commit failed: {}", e)))
+            }
+        }
     }
 
     /// Retrieve a snippet of a file from the Citadel's cache or disk.

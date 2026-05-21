@@ -3,6 +3,7 @@ use axum::{extract::State, http::StatusCode, routing::post, Json, Router};
 use koad_mcp::{JsonRpcRequest, JsonRpcResponse, McpServer};
 use std::{net::SocketAddr, sync::Arc};
 use tokio::net::TcpListener;
+use tools::commit::CommitTool;
 use tools::intel_get::IntelGetTool;
 use tools::list_topics::ListTopicsTool;
 use tools::recall::RecallTool;
@@ -24,6 +25,7 @@ async fn main() -> Result<()> {
     let partition = std::env::var("AGENT_PARTITION").unwrap_or_else(|_| "rook_local_default".to_string());
     let mcp_mode = std::env::var("MCP_MODE").unwrap_or_else(|_| "read_only".to_string());
     let transport = std::env::var("MCP_TRANSPORT").unwrap_or_else(|_| "http".to_string());
+    let agent_name = std::env::var("AGENT_NAME").unwrap_or_else(|_| "rook".to_string());
     let port: u16 = std::env::var("MCP_PORT")
         .unwrap_or_else(|_| "9742".to_string())
         .parse()
@@ -39,7 +41,8 @@ async fn main() -> Result<()> {
     server.register_tool(StatusTool::new(cass_url.clone(), partition.clone()));
 
     if mcp_mode == "read_write" {
-        tracing::info!("MCP_MODE=read_write: memory.commit tool enabled (Phase 4 — not yet implemented)");
+        tracing::info!("MCP_MODE=read_write: memory.commit tool enabled");
+        server.register_tool(CommitTool::new(cass_url.clone(), partition.clone(), agent_name.clone()));
     }
 
     match transport.as_str() {

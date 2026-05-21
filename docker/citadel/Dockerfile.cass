@@ -1,0 +1,26 @@
+# Dockerfile.cass - Unified Citadel CASS Service
+FROM ubuntu:24.04
+
+RUN apt-get update && apt-get install -y \
+    ca-certificates \
+    libssl3 \
+    sqlite3 \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN useradd -m koad && mkdir -p /app/data /home/koad/.koad-os/config && chown -R koad:koad /app /home/koad/.koad-os
+USER koad
+WORKDIR /app
+
+# Binaries are expected to be in the build context (../bin/)
+COPY --chown=koad:koad bin/koad-cass /app/koad-cass
+COPY --chown=koad:koad docker/rook/kernel.toml /home/koad/.koad-os/config/kernel.toml
+
+ENV KOADOS_URL_REDIS="redis://redis:6379"
+ENV KOADOS_URL_QDRANT="http://qdrant:6333"
+ENV RUST_LOG="info"
+ENV CASS_GRPC_PORT=50052
+ENV KOAD_HOME="/home/koad/.koad-os"
+
+EXPOSE 50052
+
+CMD ["/app/koad-cass"]

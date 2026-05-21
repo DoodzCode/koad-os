@@ -9,6 +9,7 @@ use crate::state::docking::DockingState;
 use crate::state::storage_bridge::CitadelStorageBridge;
 use chrono::Utc;
 use fred::interfaces::HashesInterface;
+use koad_core::config::KoadConfig;
 use koad_core::hierarchy::HierarchyManager;
 use koad_core::signal::SignalCorps;
 use koad_proto::citadel::v5::citadel_session_server::CitadelSession;
@@ -28,6 +29,7 @@ pub struct CitadelSessionService {
     hierarchy: Arc<HierarchyManager>,
     sessions: ActiveSessions,
     lease_duration_secs: u64,
+    config: Arc<KoadConfig>,
 }
 
 impl CitadelSessionService {
@@ -38,6 +40,7 @@ impl CitadelSessionService {
         bay_store: Arc<BayStore>,
         hierarchy: Arc<HierarchyManager>,
         lease_duration_secs: u64,
+        config: Arc<KoadConfig>,
     ) -> Self {
         Self {
             signal_corps,
@@ -46,12 +49,55 @@ impl CitadelSessionService {
             hierarchy,
             sessions: Arc::new(Mutex::new(std::collections::HashMap::new())),
             lease_duration_secs,
+            config,
         }
     }
 
     /// Provides a handle to the active sessions map for monitoring or reaper tasks.
     pub fn sessions_handle(&self) -> ActiveSessions {
         self.sessions.clone()
+    }
+
+    /// Repopulates the in-memory session cache from Redis.
+    pub async fn hydrate_sessions(&self) -> Result<(), Status> {
+        let state: std::collections::HashMap<String, String> = self
+            .storage
+            .redis
+            .pool
+            .hgetall("koad:state")
+            .await
+            .map_err(|e| Status::internal(format!("Redis error during session hydration: {}", e)))?;
+
+        let mut sessions = self.sessions.lock();
+        for (key, value) in state {
+            if key.starts_with("koad:session:") {
+                let sid = key.trim_start_matches("koad:session:");
+                if let Ok(lease) = serde_json::from_str::<serde_json::Value>(&value) {
+                    // Only hydrate sessions that haven't expired
+                    let is_live = lease["expires_at"]
+                        .as_str()
+                        .and_then(|s| chrono::DateTime::parse_from_rfc3339(s).ok())
+                        .map(|exp| exp.with_timezone(&Utc) > Utc::now())
+                        .unwrap_or(false);
+
+                    if is_live {
+                        sessions.insert(
+                            sid.to_string(),
+                            SessionRecord {
+                                agent_name: lease["agent_name"].as_str().unwrap_or_default().to_string(),
+                                state: DockingState::Active,
+                                last_heartbeat: Utc::now(), // Reset heartbeat on hydration
+                                body_id: lease["body_id"].as_str().unwrap_or_default().to_string(),
+                                session_token: lease["token"].as_str().unwrap_or_default().to_string(),
+                                level: lease["level"].as_str().unwrap_or_default().to_string(),
+                            },
+                        );
+                    }
+                }
+            }
+        }
+        info!("SessionService: Hydrated {} active sessions from Redis.", sessions.len());
+        Ok(())
     }
 
     /// The automated reaper task that transitions stale sessions to `DARK` or `TEARDOWN`.
@@ -148,11 +194,12 @@ impl CitadelSession for CitadelSessionService {
         let project_path = std::path::Path::new(&req.project_root);
         let resolved_level = self.hierarchy.resolve_level(project_path);
 
-        let agent_rank = if agent_name.to_lowercase() == "tyr" {
-            "Captain"
-        } else {
-            "Crew"
-        };
+        let agent_rank = self
+            .config
+            .identities
+            .get(&agent_name.to_lowercase())
+            .map(|id| id.rank.as_str())
+            .unwrap_or("Crew");
 
         if !self.hierarchy.validate_access(agent_rank, resolved_level) {
             return Err(Status::permission_denied(format!(

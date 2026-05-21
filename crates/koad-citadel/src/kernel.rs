@@ -14,6 +14,7 @@ use crate::signal_corps::quota::QuotaValidator;
 use crate::state::bay_store::BayStore;
 use crate::state::storage_bridge::CitadelStorageBridge;
 use crate::workspace::manager::WorkspaceManager;
+use koad_core::db::KoadDB;
 use koad_core::hierarchy::HierarchyManager;
 use koad_core::signal::SignalCorps;
 use koad_core::storage::StorageBridge;
@@ -176,12 +177,20 @@ impl KernelBuilder {
             bay_store.clone(),
             hierarchy.clone(),
             config.sessions.lease_duration_secs,
+            Arc::new(config.clone()),
         );
         let bay_svc_impl = PersonalBayService::new(bay_store.clone(), workspace_mgr.clone());
         let sector_svc_impl = SectorService::new(redis.clone(), sandbox.clone());
         let signal_svc_impl = SignalService::new(signal_corps.clone(), quota.clone());
-        let admin_svc_impl = AdminService::new(shutdown_tx.clone());
+        let koad_db_path = home_dir.join(&config.storage.db_name);
+        let koad_db = Arc::new(KoadDB::new(&koad_db_path)?);
+        let admin_svc_impl = AdminService::new(shutdown_tx.clone(), koad_db);
         let xp_svc_impl = CitadelXpService::new(storage.sqlite.clone(), config.clone()).await?;
+
+        // 0. Hydrate active sessions from Redis
+        if let Err(e) = session_svc_impl.hydrate_sessions().await {
+            error!("Kernel: Failed to hydrate sessions: {}", e);
+        }
 
         let drain_storage = storage.clone();
         let mut rx_drain = shutdown_rx.clone();
@@ -214,6 +223,10 @@ impl KernelBuilder {
         let tcp_router = Server::builder()
             .add_service(CitadelSessionServer::with_interceptor(
                 session_svc_impl.clone(),
+                auth_interceptor.clone(),
+            ))
+            .add_service(AdminServer::with_interceptor(
+                admin_svc_impl.clone(),
                 auth_interceptor.clone(),
             ))
             .add_service(PersonalBayServer::with_interceptor(

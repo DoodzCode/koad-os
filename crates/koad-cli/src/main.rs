@@ -122,6 +122,7 @@ async fn main() -> Result<()> {
             compact,
             budget,
             force,
+            export_env,
         } => {
             // Pre-boot sovereign check
             let is_authorized = if let Some(id_config) = config.identities.get(&agent) {
@@ -149,6 +150,7 @@ async fn main() -> Result<()> {
                     budget,
                     force,
                     role,
+                    export_env,
                 },
                 &config,
             )
@@ -288,6 +290,17 @@ async fn main() -> Result<()> {
         }
         Commands::Deploy { action } => {
             crate::handlers::deploy::handle_deploy_action(action, &config).await?;
+        }
+        Commands::Saveup { full } => {
+            handle_system_action(
+                SystemAction::Save { full },
+                &config,
+                &db,
+                role,
+                is_admin,
+                &agent_name,
+            )
+            .await?;
         }
     }
 

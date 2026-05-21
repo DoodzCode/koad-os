@@ -1,0 +1,36 @@
+# Warp Indexing Ignore — koados-citadel
+# Secrets / credentials
+.env
+.env.*
+**/secrets/**
+**/credentials/**
+**/*.pem
+**/*.key
+
+# Build artifacts — target/ is 25G
+target/
+**/target/
+
+# Worktree state (includes own target/, graph.db)
+.worktrees/
+
+# Code review graph (binary DB + large HTML render)
+.code-review-graph/
+
+# Dependencies
+**/node_modules/
+**/dist/
+
+# Databases
+**/*.sqlite
+**/*.db
+
+# Harness opencode generated artifacts
+harness/opencode/packages/storybook/debug-storybook.log
+harness/opencode/**/*.log
+
+# In-flight diff patch (ephemeral, not canon)
+diff.patch
+
+# Cargo lock (large, generated)
+Cargo.lock

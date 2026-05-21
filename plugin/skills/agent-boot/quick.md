@@ -7,7 +7,7 @@ Use for: mid-session re-hydration, scoped subagent spawn, CI context.
 1. Run the boot command:
 
 ```bash
-source "$KOAD_HOME/bin/koad-functions.sh" && agent-boot <name>
+source "$KOAD_HOME/bin/koad-functions.sh" && agent-boot
 ```
 
 2. Confirm the session header printed (look for `--- KoadOS Session: <name> ---`).

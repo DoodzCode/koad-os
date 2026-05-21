@@ -1,0 +1,26 @@
+# Dockerfile.mcp - Unified Citadel MCP Bridge
+FROM ubuntu:24.04
+
+RUN apt-get update && apt-get install -y \
+    ca-certificates \
+    libssl3 \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN useradd -m rook && mkdir -p /app && chown -R rook:rook /app
+USER rook
+WORKDIR /app
+
+# Binaries are expected to be in the build context (../bin/)
+COPY --chown=rook:rook bin/koad-os-mcp /app/koad-os-mcp
+
+ENV CASS_URL="http://cass:50052"
+ENV QDRANT_URL="http://qdrant:6333"
+ENV MCP_MODE="read_write"
+ENV MCP_TRANSPORT="http"
+ENV MCP_PORT="9742"
+ENV AGENT_PARTITION="citadel_default"
+ENV RUST_LOG="info"
+
+EXPOSE 9742
+
+CMD ["/app/koad-os-mcp"]

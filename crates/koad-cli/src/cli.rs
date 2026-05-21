@@ -49,6 +49,10 @@ pub enum Commands {
         /// Use when a prior session is orphaned and cannot be cleanly logged out.
         #[arg(long)]
         force: bool,
+
+        /// Output only bare `export KEY=VAL` lines suitable for `eval`. Skips MOTD.
+        #[arg(long)]
+        export_env: bool,
     },
 
     /// Core system management, orchestration, and recovery.
@@ -211,6 +215,13 @@ pub enum Commands {
     Deploy {
         #[command(subcommand)]
         action: DeployAction,
+    },
+
+    /// Alias for `koad system save` — Sovereign Save Protocol (Total State Checkpoint).
+    Saveup {
+        /// Create a full durable backup (Database + Git commit).
+        #[arg(short, long)]
+        full: bool,
     },
 }
 

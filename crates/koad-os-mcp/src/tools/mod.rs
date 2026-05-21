@@ -1,3 +1,4 @@
+pub mod commit;
 pub mod intel_get;
 pub mod list_topics;
 pub mod recall;

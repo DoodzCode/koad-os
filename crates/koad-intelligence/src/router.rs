@@ -5,7 +5,7 @@ use crate::clients::OllamaClient;
 use crate::InferenceClient;
 use anyhow::Result;
 use std::sync::Arc;
-use tracing::info;
+use tracing::{info, warn};
 
 /// High-level categories for intelligence tasks.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -32,11 +32,14 @@ impl InferenceRouter {
 
     /// Create a new router with default clients (Local Ollama).
     ///
+    /// Model resolved from `KOADOS_INTEL_MODEL` env var, falling back to `"mistral"`.
+    ///
     /// # Errors
-    /// Returns an error if the default Ollama client cannot be built.
+    /// Returns an error if the HTTP client cannot be built.
     pub fn new_default() -> Result<Self> {
-        info!("InferenceRouter: Initializing with default Ollama client.");
-        Ok(Self::new(Arc::new(OllamaClient::new(None, None)?)))
+        let model = std::env::var("KOADOS_INTEL_MODEL").unwrap_or_else(|_| "mistral".to_string());
+        info!(model = %model, "InferenceRouter: Initializing with Ollama client.");
+        Ok(Self::new(Arc::new(OllamaClient::new(Some(&model), None)?)))
     }
 
     /// Select a client for the given task.
@@ -46,17 +49,27 @@ impl InferenceRouter {
     }
 
     /// Convenience: Route a summarization request.
+    /// Falls back to returning the original text if the model is unavailable.
     pub async fn summarize(&self, text: &str) -> Result<String> {
-        self.select(InferenceTask::Distillation)
-            .summarize(text)
-            .await
+        match self.select(InferenceTask::Distillation).summarize(text).await {
+            Ok(summary) => Ok(summary),
+            Err(e) => {
+                warn!("Inference unavailable for summarize ({}), returning raw text.", e);
+                Ok(text.to_string())
+            }
+        }
     }
 
     /// Convenience: Route a significance scoring request.
+    /// Falls back to 1.0 (store everything) if the model is unavailable.
     pub async fn score(&self, text: &str) -> Result<f32> {
-        self.select(InferenceTask::Evaluation)
-            .score_significance(text)
-            .await
+        match self.select(InferenceTask::Evaluation).score_significance(text).await {
+            Ok(score) => Ok(score),
+            Err(e) => {
+                warn!("Inference unavailable for score ({}), defaulting to 1.0.", e);
+                Ok(1.0)
+            }
+        }
     }
 }
 

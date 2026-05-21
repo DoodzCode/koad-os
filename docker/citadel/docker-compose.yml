@@ -1,0 +1,69 @@
+services:
+  redis:
+    image: redis/redis-stack:7.2.0-v10
+    container_name: citadel-redis
+    volumes:
+      - citadel-redis-data:/data
+    restart: unless-stopped
+    networks:
+      - citadel-net
+
+  qdrant:
+    image: qdrant/qdrant:v1.11.0
+    container_name: citadel-qdrant
+    volumes:
+      - citadel-qdrant-data:/qdrant/storage
+    restart: unless-stopped
+    networks:
+      - citadel-net
+
+  cass:
+    build:
+      context: ../..
+      dockerfile: docker/citadel/Dockerfile.cass
+    container_name: citadel-cass
+    depends_on:
+      - redis
+      - qdrant
+    environment:
+      - KOADOS_URL_REDIS=redis://redis:6379
+      - KOADOS_URL_QDRANT=http://qdrant:6333
+      - CASS_GRPC_PORT=50052
+      - RUST_LOG=info
+    volumes:
+      - citadel-cass-data:/app/data
+      - type: bind
+        source: ${HOME}/.citadel-jupiter/config/identities
+        target: /home/koad/.koad-os/config/identities
+        read_only: true
+    restart: unless-stopped
+    networks:
+      - citadel-net
+
+  mcp:
+    build:
+      context: ../..
+      dockerfile: docker/citadel/Dockerfile.mcp
+    container_name: citadel-mcp
+    depends_on:
+      - cass
+    ports:
+      - "9742:9742"
+    environment:
+      - CASS_URL=http://cass:50052
+      - QDRANT_URL=http://qdrant:6333
+      - MCP_MODE=read_write
+      - AGENT_PARTITION=${AGENT_NAME:-citadel}_${HOSTNAME:-jupiter}
+      - RUST_LOG=info
+    restart: unless-stopped
+    networks:
+      - citadel-net
+
+networks:
+  citadel-net:
+    driver: bridge
+
+volumes:
+  citadel-redis-data:
+  citadel-qdrant-data:
+  citadel-cass-data:

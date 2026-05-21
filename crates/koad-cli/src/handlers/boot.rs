@@ -20,6 +20,7 @@ pub struct BootOptions {
     pub budget: u32,
     pub force: bool,
     pub role: String,
+    pub export_env: bool,
 }
 
 pub async fn handle_boot_command(opts: BootOptions, config: &KoadConfig) -> Result<()> {
@@ -165,6 +166,12 @@ pub async fn handle_boot_command(opts: BootOptions, config: &KoadConfig) -> Resu
             body_id,
             context_file.display()
         );
+    } else if opts.export_env {
+        // Bare export lines only — safe for `eval $(koad boot --agent X --export-env)`
+        println!("export KOAD_SESSION_ID=\"{}\"", session_id);
+        println!("export KOAD_BODY_ID=\"{}\"", body_id);
+        println!("export KOAD_CONTEXT_FILE=\"{}\"", context_file.display());
+        println!("export KOAD_AGENT_NAME=\"{}\"", agent);
     } else {
         show_motd(&agent, config).await?;
 
