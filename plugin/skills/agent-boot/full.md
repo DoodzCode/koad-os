@@ -19,8 +19,11 @@ koad map look
 3. Check service health:
 
 ```bash
-koad system start && koad system auth
+koad system status
 ```
+
+- If any show **[FAIL]** or **[WARN]**: run `koad doctor -f` to self-heal.
+- If issues persist: run `koad system start` to attempt manual service recovery.
 
 4. Read open tasks from the agent vault:
 

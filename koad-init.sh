@@ -175,7 +175,7 @@ fi
 # 6. Binary Installation (Final Check)
 CURRENT_STEP="Binary Installation"
 section "Binary Installation"
-for bin in koad koad-agent koad-cass koad-os-mcp; do
+for bin in koad koad-agent koad-cass koad-citadel koad-os-mcp; do
     if [[ -f "target/release/$bin" ]]; then
         # Remove symlink or old binary before copy
         rm -f "$BIN_DIR/$bin"

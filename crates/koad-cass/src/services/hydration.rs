@@ -10,6 +10,8 @@ use koad_codegraph::CodeGraph;
 use koad_core::hierarchy::HierarchyManager;
 use koad_core::utils::tokens::count_tokens;
 use koad_core::intelligence::IntelligenceRouter;
+#[cfg(test)]
+use koad_intelligence::router::InferenceRouter;
 use koad_proto::cass::v1::hydration_service_server::HydrationService;
 use koad_proto::cass::v1::{HydrationRequest, HydrationResponse};
 use std::fs;

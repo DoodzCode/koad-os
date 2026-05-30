@@ -72,7 +72,16 @@ impl MemoryTier for TieredStorage {
     }
 
     async fn record_episode(&self, episode: EpisodicMemory) -> Result<()> {
-        self.l2.record_episode(episode).await
+        self.l2.record_episode(episode.clone()).await?;
+
+        let l3 = self.l3.clone();
+        tokio::spawn(async move {
+            if let Err(e) = l3.record_episode(episode).await {
+                tracing::error!(error = %e, "TieredStorage: L3 record_episode failed");
+            }
+        });
+
+        Ok(())
     }
 
     async fn query_recent_episodes(
@@ -92,6 +101,12 @@ impl MemoryTier for TieredStorage {
         partition: &str,
         limit: u32,
     ) -> Result<Vec<FactCard>> {
+        // Try L3 (Qdrant vector search) first
+        match self.l3.search_semantic(query, partition, limit).await {
+            Ok(facts) if !facts.is_empty() => return Ok(facts),
+            Err(e) => tracing::warn!(error = %e, "TieredStorage: L3 semantic search failed, falling through to L2 text match"),
+            Ok(_) => {}
+        }
         self.l2.search_semantic(query, partition, limit).await
     }
 }
@@ -117,7 +132,7 @@ mod tests {
         )
         .await?;
         let l1 = Arc::new(RedisTier::new(redis_client.pool.clone()));
-        let l3 = Arc::new(match QdrantTier::new("http://127.0.0.1:6334").await {
+        let l3 = Arc::new(match QdrantTier::new("http://127.0.0.1:6334", None).await {
             Ok(q) => q,
             Err(_) => QdrantTier::new_offline(),
         });

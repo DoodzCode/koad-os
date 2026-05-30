@@ -41,13 +41,15 @@ async fn main() -> Result<()> {
     )?);
     let redis_tier = Arc::new(RedisTier::new(redis.pool.clone()));
 
+    let intelligence = Arc::new(InferenceRouter::new_default()?);
+
     let qdrant_url = std::env::var("KOADOS_URL_QDRANT")
         .or_else(|_| std::env::var("QDRANT_URL"))
         .unwrap_or_else(|_| "http://127.0.0.1:6334".to_string());
 
     let qdrant = match tokio::time::timeout(
-        std::time::Duration::from_secs(3),
-        QdrantTier::new(&qdrant_url),
+        std::time::Duration::from_secs(15),
+        QdrantTier::new(&qdrant_url, Some(Arc::clone(&intelligence))),
     )
     .await
     {
@@ -79,8 +81,6 @@ async fn main() -> Result<()> {
         .and_then(|n| n.index.get("stream"))
         .cloned()
         .unwrap_or_default();
-
-    let intelligence = Arc::new(InferenceRouter::new_default()?);
 
     // Services
     let memory_svc = CassMemoryService::new(storage.clone(), intelligence.clone());

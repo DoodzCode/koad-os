@@ -584,6 +584,17 @@ pub enum SystemAction {
     /// Start the Citadel kernel and all dependent services (CASS).
     Start,
 
+    /// Display real-time system telemetry and Citadel integrity.
+    Status {
+        /// Output telemetry data as JSON.
+        #[arg(short, long)]
+        json: bool,
+
+        /// Perform an exhaustive diagnostic sweep (Ghost detection, Resource allocation).
+        #[arg(short, long)]
+        full: bool,
+    },
+
     /// Restart the Citadel kernel and all dependent services.
     Restart,
 

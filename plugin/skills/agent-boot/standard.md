@@ -24,8 +24,12 @@ koad map look
 4. Check service health:
 
 ```bash
-koad system start && koad system auth
+koad system status
 ```
+
+- If all systems show **[PASS]**: proceed to step 5.
+- If any show **[FAIL]** or **[WARN]**: run `koad doctor -f` to self-heal.
+- If issues persist: run `koad system start` to attempt manual service recovery.
 
 5. Read working memory open items from the session brief output (printed during boot).
 
@@ -33,5 +37,12 @@ koad system start && koad system auth
    - Identity confirmed (agent name + rank)
    - Service state (which of Redis / Citadel / CASS are ACTIVE or OFFLINE)
    - Any open items surfaced from working memory
+
+7. Doctrine check (Officer+ ranks):
+   - For non-trivial tasks, run the Spec Evaluation Gate (SEG) before accepting execution.
+   - Use doctrine: `docs/ais/protocols/SPEC_EVALUATION_DOCTRINE.md`.
+   - Publish SEG output (clarity score, risks, ambiguities, acceptance contract, go/hold).
+
+8. **Recall Before Rebuild:** before starting any task, check `koad updates list -n 5` or query intel for related prior work to ensure context continuity.
 
 Do not begin work until the user gives direction.

@@ -115,8 +115,8 @@ ok "Infrastructure is running in the background."
 # 4. Host Binary Compilation
 CURRENT_STEP="Binary Compilation"
 section "Host Binary Compilation (Rust)"
-info "Building 'koad', 'koad-agent', and 'koad-os-mcp' in release mode..."
-cargo build --release --bin koad --bin koad-agent --bin koad-os-mcp
+info "Building 'koad', 'koad-agent', 'koad-cass', 'koad-citadel', and 'koad-os-mcp' in release mode..."
+cargo build --release --bin koad --bin koad-agent --bin koad-cass --bin koad-citadel --bin koad-os-mcp
 ok "Binaries compiled successfully."
 
 # 5. Next Steps

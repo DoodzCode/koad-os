@@ -71,6 +71,91 @@ impl InferenceRouter {
             }
         }
     }
+
+    /// Convenience: Generate a dense vector embedding using the evaluation client.
+    /// Falls back to Gemini or OpenRouter APIs if the local client fails and the appropriate environment variables are configured.
+    pub async fn embed(&self, text: &str) -> Result<Vec<f32>> {
+        match self.select(InferenceTask::Evaluation).embed(text).await {
+            Ok(vec) => Ok(vec),
+            Err(e) => {
+                warn!("Ollama embedding failed ({:?}). Attempting cloud fallback...", e);
+                if let Ok(key) = std::env::var("GEMINI_API_KEY") {
+                    match Self::embed_gemini(text, &key).await {
+                        Ok(vec) => {
+                            info!("Gemini cloud embedding fallback successful.");
+                            return Ok(vec);
+                        }
+                        Err(err) => warn!("Gemini cloud embedding fallback failed: {:?}", err),
+                    }
+                }
+                if let Ok(key) = std::env::var("OPENROUTER_API_KEY") {
+                    match Self::embed_openrouter(text, &key).await {
+                        Ok(vec) => {
+                            info!("OpenRouter cloud embedding fallback successful.");
+                            return Ok(vec);
+                        }
+                        Err(err) => warn!("OpenRouter cloud embedding fallback failed: {:?}", err),
+                    }
+                }
+                Err(e)
+            }
+        }
+    }
+
+    async fn embed_gemini(text: &str, api_key: &str) -> Result<Vec<f32>> {
+        let client = reqwest::Client::new();
+        let url = format!(
+            "https://generativelanguage.googleapis.com/v1beta/models/text-embedding-004:embedContent?key={}",
+            api_key
+        );
+        let resp = client
+            .post(&url)
+            .json(&serde_json::json!({
+                "content": {
+                    "parts": [{ "text": text }]
+                }
+            }))
+            .send()
+            .await?;
+        if !resp.status().is_success() {
+            return Err(anyhow::anyhow!("Gemini API error status: {}", resp.status()));
+        }
+        let body: serde_json::Value = resp.json().await?;
+        let values = body["embedding"]["values"]
+            .as_array()
+            .ok_or_else(|| anyhow::anyhow!("Invalid Gemini embedding response structure"))?;
+        let vec: Result<Vec<f32>, _> = values
+            .iter()
+            .map(|v| v.as_f64().map(|f| f as f32).ok_or_else(|| anyhow::anyhow!("Invalid float value")))
+            .collect();
+        vec
+    }
+
+    async fn embed_openrouter(text: &str, api_key: &str) -> Result<Vec<f32>> {
+        let client = reqwest::Client::new();
+        let url = "https://openrouter.ai/api/v1/embeddings";
+        let resp = client
+            .post(url)
+            .header("Authorization", format!("Bearer {}", api_key))
+            .json(&serde_json::json!({
+                "model": "text-embedding-3-small",
+                "input": text
+            }))
+            .send()
+            .await?;
+        if !resp.status().is_success() {
+            return Err(anyhow::anyhow!("OpenRouter API error status: {}", resp.status()));
+        }
+        let body: serde_json::Value = resp.json().await?;
+        let values = body["data"][0]["embedding"]
+            .as_array()
+            .ok_or_else(|| anyhow::anyhow!("Invalid OpenRouter embedding response structure"))?;
+        let vec: Result<Vec<f32>, _> = values
+            .iter()
+            .map(|v| v.as_f64().map(|f| f as f32).ok_or_else(|| anyhow::anyhow!("Invalid float value")))
+            .collect();
+        vec
+    }
 }
 
 #[async_trait::async_trait]

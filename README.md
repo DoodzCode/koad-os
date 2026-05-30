@@ -77,5 +77,12 @@ Then add the printed config snippet to your `claude_desktop_config.json`.
 ## 📜 The Canon
 All development follows the **KoadOS Contributor Canon** and **RUST_CANON**. Methods are verified via KSRP (KoadOS Self-Review Protocol) and PSRP (Post-Session Reflection Protocol).
 
+AIS documentation hub:
+- `docs/ais/README.md` (AIS index and operating system docs)
+
+AIS doctrine references:
+- `docs/ais/protocols/TOKEN_EFFICIENCY.md`
+- `docs/ais/protocols/SPEC_EVALUATION_DOCTRINE.md` (Officer+ spec-eval gate)
+
 ---
 *Build small. Waste nothing. Know more. Trust the Canon.*

@@ -140,32 +140,29 @@ mod tests {
     use koad_core::config::KoadConfig;
 
     fn mock_config() -> KoadConfig {
-        KoadConfig::load().unwrap_or_else(|_| {
-            // Fallback for environment without real config
-            serde_json::from_str(
-                r#"{
-                "home": "/tmp/.koad-os",
-                "system": { "version": "test" },
-                "network": {
-                    "gateway_port": 7700,
-                    "gateway_addr": "127.0.0.1",
-                    "citadel_grpc_port": 50051,
-                    "citadel_grpc_addr": "127.0.0.1",
-                    "cass_grpc_port": 50052,
-                    "cass_grpc_addr": "127.0.0.1",
-                    "redis_socket": "/tmp/redis.sock",
-                    "citadel_socket": "/tmp/citadel.sock"
-                },
-                "storage": { "db_name": "koad_test.db", "drain_interval_secs": 60 },
-                "sandbox": {
-                    "enabled": true,
-                    "blacklist": ["sudo ", "su "],
-                    "sanctuary": [".koad-os"]
-                }
-            }"#,
-            )
-            .unwrap()
-        })
+        serde_json::from_str(
+            r#"{
+            "home": "/tmp/.koad-os",
+            "system": { "version": "test" },
+            "network": {
+                "gateway_port": 7700,
+                "gateway_addr": "127.0.0.1",
+                "citadel_grpc_port": 50051,
+                "citadel_grpc_addr": "127.0.0.1",
+                "cass_grpc_port": 50052,
+                "cass_grpc_addr": "127.0.0.1",
+                "redis_socket": "/tmp/redis.sock",
+                "citadel_socket": "/tmp/citadel.sock"
+            },
+            "storage": { "db_name": "koad_test.db", "drain_interval_secs": 60 },
+            "sandbox": {
+                "enabled": true,
+                "blacklist": ["sudo ", "su "],
+                "sanctuary": [".koad-os"]
+            }
+        }"#,
+        )
+        .unwrap()
     }
 
     #[test]

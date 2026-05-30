@@ -1,12 +1,17 @@
 # Citadel SITREP (Situation Report)
 **Date:** 2026-05-02
-**Current Objective:** Token-efficiency rollout and harness optimization.
+**Current Objective:** AIS institutionalization: operating system docs, navigation structure, and progress visibility.
 
 ## 🎯 Active Missions
-- [ ] **P2 OpenRouter Integration:** Route requests to cost-effective models for lightweight tasks.
-- [ ] **P3 caveman/cavemem Skill:** Implement output and context compression skills.
-- [ ] **Phase 3 Vault Integration:** Integrate `koad vault skill` with the Blueprint/Instance model.
-- [ ] **Rust Review Skill:** Refine `koad-review.sh` into a permanent Rust skill.
+- [ ] **AIS Structure Rollout:** Complete cross-linking from legacy docs into `docs/ais/` index and operating planes.
+- [ ] **AIS Backlog Triage:** Identify stale/orphan docs and classify as refactor/archive/remove.
+- [ ] **Navigation nMap Adoption:** Expand filesystem surface aliases and validate map coverage.
+- [ ] **Progress Cadence Enforcement:** Weekly SITREP refresh and update-note discipline.
+
+## 🗂 AIS Backlog
+- [ ] Add machine-readable nMap JSON export workflow.
+- [ ] Add link-check script for AIS docs and protocol references.
+- [ ] Add owner metadata and last-reviewed dates to legacy docs.
 
 ## 🛠️ Recent Accomplishments
 - **RTK Global Rollout (P1):** Integrated `rtk` (Rust Token Killer) across all agents and runtimes. Measured 70%+ savings on standard CLI tool calls.

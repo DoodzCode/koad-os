@@ -102,6 +102,42 @@ impl InferenceClient for OllamaClient {
 
         Ok(score.clamp(0.0, 1.0))
     }
+
+    async fn embed(&self, text: &str) -> Result<Vec<f32>> {
+        let url = format!("{}/api/embeddings", self.base_url);
+
+        debug!(model = %self.model, "Ollama: Sending embeddings request to {}", url);
+
+        let response = self
+            .client
+            .post(&url)
+            .json(&json!({
+                "model": self.model,
+                "prompt": text,
+            }))
+            .send()
+            .await
+            .context("Failed to connect to Ollama embeddings endpoint.")?;
+
+        if !response.status().is_success() {
+            let status = response.status();
+            let err_text = response.text().await.unwrap_or_default();
+            error!(status = %status, error = %err_text, "Ollama Embeddings API Error");
+            return Err(anyhow::anyhow!("Ollama Embeddings API returned error: {}", err_text));
+        }
+
+        let body: serde_json::Value = response.json().await?;
+        let embedding_val = &body["embedding"];
+        if let Some(arr) = embedding_val.as_array() {
+            let vec: Result<Vec<f32>, _> = arr
+                .iter()
+                .map(|v| v.as_f64().map(|f| f as f32).context("Invalid embedding element"))
+                .collect();
+            vec
+        } else {
+            Err(anyhow::anyhow!("Ollama response did not contain 'embedding' array"))
+        }
+    }
 }
 
 #[cfg(test)]

@@ -20,6 +20,9 @@ impl InferenceClient for MockInferenceClient {
     async fn score_significance(&self, _text: &str) -> Result<f32> {
         Ok(self.score)
     }
+    async fn embed(&self, _text: &str) -> Result<Vec<f32>> {
+        Ok(vec![0.0f32; 32])
+    }
 }
 
 #[tokio::test]

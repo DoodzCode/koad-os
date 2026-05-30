@@ -200,7 +200,8 @@ mod tests {
     #[tokio::test]
     async fn test_admin_shutdown() -> anyhow::Result<()> {
         let (tx, mut rx) = watch::channel(false);
-        let service = AdminService::new(tx);
+        let db = Arc::new(KoadDB::new(std::path::Path::new(":memory:")).unwrap());
+        let service = AdminService::new(tx, db);
 
         let req = Request::new(ShutdownRequest {
             context: None,
@@ -217,7 +218,8 @@ mod tests {
     #[tokio::test]
     async fn test_admin_status() -> anyhow::Result<()> {
         let (tx, _) = watch::channel(false);
-        let service = AdminService::new(tx);
+        let db = Arc::new(KoadDB::new(std::path::Path::new(":memory:")).unwrap());
+        let service = AdminService::new(tx, db);
 
         let req = Request::new(SystemStatusRequest { context: None });
         let res = service.get_system_status(req).await?;

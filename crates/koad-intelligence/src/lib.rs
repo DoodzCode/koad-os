@@ -30,4 +30,7 @@ pub trait InferenceClient: Send + Sync {
 
     /// Score the significance of a piece of content (0.0 to 1.0).
     async fn score_significance(&self, text: &str) -> Result<f32>;
+
+    /// Generate a dense vector embedding for the provided text.
+    async fn embed(&self, text: &str) -> Result<Vec<f32>>;
 }
