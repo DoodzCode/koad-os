@@ -257,7 +257,7 @@ run_install() {
     # 2. Directory Setup
     CURRENT_STEP="Directory Setup"
     section "Directory Setup"
-    for dir in "$BIN_DIR" "$LOG_DIR" "$KOAD_HOME/cache" "$KOAD_HOME/data/db" "$KOAD_HOME/data/redis" "$KOAD_HOME/run" "$KOAD_HOME/config" "$KOAD_HOME/skills" "$KOAD_HOME/docker/rook"; do
+    for dir in "$BIN_DIR" "$LOG_DIR" "$KOAD_HOME/cache" "$KOAD_HOME/data/db" "$KOAD_HOME/data/redis" "$KOAD_HOME/run" "$KOAD_HOME/config" "$KOAD_HOME/config/identities" "$KOAD_HOME/skills" "$KOAD_HOME/docker/rook"; do
         mkdir -p "$dir"
         ok "$dir created"
     done
@@ -406,6 +406,10 @@ run_install() {
     
     CURRENT_STEP="Done"
     ok "KoadOS installation and fresh setup is complete!"
+    echo -e "\n${BOLD}Pro-Tip: Managing Agent Identities${RESET}"
+    echo "Identities are local and private to this Citadel instance (git-ignored)."
+    echo "To create/register a new agent identity, run:"
+    echo -e "  ${CYAN}koad agent new <NAME> --rank <RANK> --role <ROLE>${RESET}\n"
 }
 
 # -----------------------------------------------------------------------------
