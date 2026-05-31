@@ -55,8 +55,8 @@ locate_citadels() {
     fi
     
     # 3. Check active directory for Citadel Jupiter
-    if [[ -d "/home/ideans/.citadel-jupiter" ]]; then
-        found+=("/home/ideans/.citadel-jupiter")
+    if [[ -d "$HOME/.citadel-jupiter" ]]; then
+        found+=("$HOME/.citadel-jupiter")
     fi
     
     # 4. Check default ~/.koad-os

@@ -113,7 +113,9 @@ async fn main() -> Result<()> {
     if args.record_episode {
         let episode = EpisodicMemory {
             session_id: args.session_id.clone(),
-            project_path: "/home/ideans/koados-citadel".to_string(),
+            project_path: std::env::current_dir()
+                .map(|p| p.to_string_lossy().to_string())
+                .unwrap_or_else(|_| ".".to_string()),
             summary: content[..content.len().min(2000)].to_string(),
             turn_count: chunks.len() as u32,
             timestamp: Some(prost_types::Timestamp {
