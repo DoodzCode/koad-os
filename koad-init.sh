@@ -2,14 +2,14 @@
 # =============================================================================
 # KoadOS Initialization Script
 # =============================================================================
-set -euo pipefail
-
 # Prevent sourcing the script to avoid closing parent terminal on exits/traps
 if [[ "${BASH_SOURCE[0]}" != "${0}" ]]; then
     echo -e "\033[0;31m✗\033[0m Error: This script must be executed directly, not sourced."
     echo "Run it as: ./koad-init.sh [KOAD_HOME]"
     return 1 2>/dev/null || exit 1
 fi
+
+set -euo pipefail
 
 # Colours
 RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'
