@@ -65,6 +65,8 @@ cache/
 config/integrations/*.toml
 config/kernel.toml
 config/redis.conf
+config/identities/*.toml
+config/identities/**/*.toml
 data/db/
 data/redis/
 debug/
