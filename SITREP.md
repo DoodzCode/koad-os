@@ -1,12 +1,11 @@
 # Citadel SITREP (Situation Report)
-**Date:** 2026-05-02
-**Current Objective:** AIS institutionalization: operating system docs, navigation structure, and progress visibility.
+**Date:** 2026-05-31
+**Current Objective:** KoadOS repository synchronization, packaging, and robust installation/update mechanics.
 
 ## 🎯 Active Missions
-- [ ] **AIS Structure Rollout:** Complete cross-linking from legacy docs into `docs/ais/` index and operating planes.
-- [ ] **AIS Backlog Triage:** Identify stale/orphan docs and classify as refactor/archive/remove.
-- [ ] **Navigation nMap Adoption:** Expand filesystem surface aliases and validate map coverage.
-- [ ] **Progress Cadence Enforcement:** Weekly SITREP refresh and update-note discipline.
+- [ ] **Fleet Distribution Prep:** Verify fresh installation on external systems and prepare release tag.
+- [ ] **AIS Documentation Sync:** Complete operating documents for the unified installer and `--update` flags.
+- [ ] **Docker Integration Guide:** Document WSL Resource configuration constraints for new developers.
 
 ## 🗂 AIS Backlog
 - [ ] Add machine-readable nMap JSON export workflow.
@@ -14,16 +13,16 @@
 - [ ] Add owner metadata and last-reviewed dates to legacy docs.
 
 ## 🛠️ Recent Accomplishments
-- **RTK Global Rollout (P1):** Integrated `rtk` (Rust Token Killer) across all agents and runtimes. Measured 70%+ savings on standard CLI tool calls.
-- **Task-Scoped Caveman (P3):** Deployed the `caveman` skill suite with "Sovereign Prose vs. Task-Talk" boundaries.
-- **Efficiency Core Blueprint:** Codified `skill-efficiency-core` as a canonical Citadel Skill blueprint for cross-harness parity (Claude/Codex/Gemini).
-- **Navigation Recovery:** Fixed `koad map look` failure by implementing automatic SQLite schema initialization for `notion-sync.db`.
+- **Unified Installer & Updater (P1):** Created a single root entrypoint `install.sh` supporting both `--install` (clean setups) and `--update` (automated system-wide upgrades).
+- **Private Identity Isolation (P2):** Hardened `.gitignore` and cached indexes to ensure private Citadel metadata (`config/identities/*.toml`) is never leaked via git.
+- **Shell-Crash Protection (P1):** Restructured shell script headers (`install.sh`, `koad-init.sh`, `koad-setup.sh`, `scripts/uninstall.sh`) so that sourcing checks occur before `set -euo pipefail`, preventing interactive shell terminations.
+- **Docker/CASS Build Stabilization (P1):** Upgraded container builder environments to Rust `1.90` and mapped the workspace `proto/` definitions directory into the builder stages, resolving the `time-core` Edition 2024 compiler panic.
 
 ## 🏗️ Architectural Decisions
-- **Token Efficiency First:** `rtk` initialization is now a foundational requirement for all neural link sessions via `agent-boot.sh`.
-- **Self-Healing Data Layers:** Bridge proxies are now responsible for their own schema initialization to prevent database-missing errors on first-run.
+- **Private Identity Separation:** User agent settings must remain strictly decoupled from the core codebase. Identity profiles are created during initialization.
+- **Rust Toolchain Modernization:** Container builder environments will track modern compiler versions (>=1.90) to prevent breakages due to upstream dependencies transitioning to Rust Edition 2024.
 
 ## 🔜 Immediate Next Actions
-1. Deploy `ANTHROPIC_BASE_URL` routing for OpenRouter (P2).
-2. Install and register `caveman` skill for squad-leader+ agents (P3).
-3. Finalize Docker WSL stabilization for Qdrant/CASS.
+1. Push local changes to the remote branch (`git push`).
+2. Verify native Docker WSL integration on the target system.
+3. Test clean installation flow in a secondary sandbox container.
