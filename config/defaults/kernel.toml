@@ -1,0 +1,37 @@
+[system]
+version = "3.2"
+github_owner = "Fryymann"
+github_repo = "koad-os"
+
+[network]
+citadel_grpc_port = 50051
+citadel_grpc_addr = "http://localhost:50051"
+cass_grpc_port = 50052
+cass_grpc_addr = "http://localhost:50052"
+redis_socket = "run/koad.sock"
+citadel_socket = "run/kcitadel.sock"
+
+[storage]
+db_name = "data/db/koad.db"
+drain_interval_secs = 30
+
+[sessions]
+deadman_timeout_secs = 45
+dark_timeout_secs = 60
+purge_timeout_secs = 300
+lease_duration_secs = 90
+reaper_interval_secs = 10
+
+[filesystem]
+workspace_root = "~"
+protected_paths = ["~/.ssh", "~/.notion"]
+allowed_directories = [
+  "~/citadel-jupiter",
+  "~/projects"
+]
+custom_config_dir = "~/.koad-os/config/custom"
+
+[sandbox]
+enabled = true
+blacklist = ["sudo ", "su ", "rm -rf /", "koad boot"]
+sanctuary = ["citadel-jupiter", "/etc", "/var", "/root"]

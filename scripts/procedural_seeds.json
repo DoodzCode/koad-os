@@ -1,0 +1,31 @@
+{
+  "institutional_knowledge": [
+    {
+      "pattern": "The Orientation Law",
+      "logic": "Orientation is the highest-cost agent task. Domain-specific indices (Documentation Shields) are mandatory to reduce token burn by 30-40%.",
+      "tags": ["efficiency", "orientation"]
+    },
+    {
+      "pattern": "The No-Read Protocol",
+      "logic": "Files exceeding 50 lines must be distilled or surgically read. Direct reading of large files is a context-window violation.",
+      "tags": ["efficiency", "context"]
+    },
+    {
+      "pattern": "The Sanctuary Pillar",
+      "logic": "All filesystem mutations must be performed via MCP supervisors. Raw shell writes are forbidden for security and auditability.",
+      "tags": ["security", "sanctuary"]
+    },
+    {
+      "pattern": "The Reflection Ritual",
+      "logic": "No task is 'Complete' without a Three-Pass Saveup (Fact, Learn, Ponder) to fuel compounding memory.",
+      "tags": ["process", "memory"]
+    }
+  ],
+  "hardware_locks": [
+    {
+      "source": "pimpedbash",
+      "legacy_path": "/mnt/c/data/skylinks",
+      "abstracted_to": "$SKYLINKS_HOME"
+    }
+  ]
+}

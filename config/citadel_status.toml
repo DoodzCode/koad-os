@@ -1,0 +1,89 @@
+[status_registry.motd]
+enabled = true
+show_citadel_snapshot = true
+show_agent_identity = true
+show_stats = true
+show_intelligence = true
+
+[status_registry.status_board]
+refresh_interval_secs = 0  # 0 = single-pass print
+color_mode = "red_yellow_green"
+
+# --- System Registry ---
+
+[[status_registry.status_board.systems]]
+id = "citadel-core"
+name = "Control Plane (Citadel)"
+subsystem = "Core"
+enabled = true
+stub = false
+probe_type = "grpc"
+probe_target = "citadel"
+
+[[status_registry.status_board.systems]]
+id = "engine-room"
+name = "Engine Room (Redis)"
+subsystem = "Data"
+enabled = true
+stub = false
+probe_type = "socket"
+probe_target = "redis"
+
+[[status_registry.status_board.systems]]
+id = "memory-bank"
+name = "Memory Bank (SQLite)"
+subsystem = "Data"
+enabled = true
+stub = false
+probe_type = "file"
+probe_target = "sqlite"
+
+[[status_registry.status_board.systems]]
+id = "cass-hydration"
+name = "CASS Hydration"
+subsystem = "Cognitive"
+enabled = true
+stub = false
+probe_type = "grpc"
+probe_target = "cass"
+
+[[status_registry.status_board.systems]]
+id = "cass-memory"
+name = "CASS Memory"
+subsystem = "Cognitive"
+enabled = true
+stub = false
+probe_type = "grpc"
+probe_target = "cass"
+
+[[status_registry.status_board.systems]]
+id = "signal-corps"
+name = "Signal Corps"
+subsystem = "Core"
+enabled = true
+stub = true
+probe_type = "none"
+
+[[status_registry.status_board.systems]]
+id = "personal-bay"
+name = "Personal Bays"
+subsystem = "Storage"
+enabled = true
+stub = true
+probe_type = "none"
+
+[[status_registry.status_board.systems]]
+id = "codegraph"
+name = "Code Graph"
+subsystem = "Intelligence"
+enabled = true
+stub = true
+probe_type = "none"
+
+[[status_registry.status_board.systems]]
+id = "sandbox"
+name = "Sandbox"
+subsystem = "Security"
+enabled = true
+stub = true
+probe_type = "none"

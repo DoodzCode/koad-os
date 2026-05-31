@@ -1,0 +1,17 @@
+[registry]
+identity_source = "config/identities/"
+auto_register = true
+
+[personal_bays]
+base_path = "~/.koad-os/"
+isolation = "bwrap"
+fallback = "chroot"
+
+[agents]
+active = ["tyr", "sky", "clyde", "hermes"]
+
+[roles]
+admiral = ["all"]
+captain = ["citadel", "core", "proto"]
+officer = ["cass", "intel", "signal"]
+sentinel = ["audit", "jailing", "integrity"]

@@ -1,0 +1,18 @@
+[Unit]
+Description=KoadOS Citadel gRPC Control Plane
+After=network.target
+Wants=koad-cass.service
+
+[Service]
+Type=simple
+User={{USER}}
+WorkingDirectory={{KOAD_HOME}}
+EnvironmentFile={{KOAD_HOME}}/.env
+ExecStart={{KOAD_HOME}}/bin/koad-citadel
+Restart=on-failure
+RestartSec=5
+StandardOutput=append:{{KOAD_HOME}}/logs/citadel.log
+StandardError=append:{{KOAD_HOME}}/logs/citadel.error.log
+
+[Install]
+WantedBy=multi-user.target

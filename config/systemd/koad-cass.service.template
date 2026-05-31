@@ -1,0 +1,19 @@
+[Unit]
+Description=KoadOS CASS Cognitive Memory Service
+After=network.target docker.service koad-citadel.service
+
+[Service]
+Type=simple
+User={{USER}}
+WorkingDirectory={{KOAD_HOME}}
+EnvironmentFile={{KOAD_HOME}}/.env
+ExecStartPre={{KOAD_HOME}}/scripts/verify-services.sh
+TimeoutStartSec=45
+ExecStart={{KOAD_HOME}}/bin/koad-cass
+Restart=on-failure
+RestartSec=5
+StandardOutput=append:{{KOAD_HOME}}/logs/cass.log
+StandardError=append:{{KOAD_HOME}}/logs/cass.error.log
+
+[Install]
+WantedBy=multi-user.target

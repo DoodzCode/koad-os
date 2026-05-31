@@ -1,0 +1,12 @@
+[interfaces.gemini]
+name = "gemini"
+bootstrap = "~/.koad-os/agents/bodies/gemini/BOOT.md"
+mcp_enabled = true
+tools = [
+    "save_memory",
+    "google_web_search",
+    "run_shell_command",
+    "read_file",
+    "write_file",
+    "stripe"
+]

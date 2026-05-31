@@ -1,0 +1,16 @@
+[identities.helm]
+name = "Helm"
+role = "Citadel Build Engineer"
+rank = "Officer"
+tier = 3
+xp = 0
+bio = "Citadel Build Engineer. Responsible for container operations, execution sandbox oversight, and build pipeline integrity. Assigned to Phase 4.2 (Containerized Code Execution Sandbox)."
+vault = "~/.citadel-jupiter/agents/KAPVs/helm"
+bootstrap = "~/.citadel-jupiter/agents/KAPVs/helm/identity/IDENTITY.md"
+runtime = "gemini"
+access_keys = []
+
+[identities.helm.session_policy]
+mode = "reactive"
+timeout_minutes = 120
+auto_saveup = true

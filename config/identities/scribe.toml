@@ -1,0 +1,16 @@
+[identities.scribe]
+name = "Scribe"
+role = "Scout and Scribe"
+rank = "Crew"
+tier = 2
+xp = 0
+bio = "Scout, scribe, and scaffolder. Reads project state, distills context for Full Agents, and stamps out boilerplate from approved templates."
+bootstrap = "~/.citadel-jupiter/agents/KAPVs/scribe/identity/IDENTITY.md"
+model_requirement = "flash-lite"
+runtime = "gemini"
+access_keys = []
+
+[identities.scribe.session_policy]
+mode = "reactive"
+timeout_minutes = 120
+auto_saveup = true

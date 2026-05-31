@@ -1,0 +1,5 @@
+[integrations.github]
+api_base = "https://api.github.com"
+default_owner = "YOUR_USERNAME"
+default_repo = "YOUR_REPO"
+default_project_number = 1

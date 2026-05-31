@@ -1,0 +1,9 @@
+[interfaces.codex]
+name = "codex"
+bootstrap = "~/.codex/AGENTS.md"
+mcp_enabled = false
+tools = [
+    "run_shell_command",
+    "read_file",
+    "write_file"
+]

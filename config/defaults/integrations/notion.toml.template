@@ -1,0 +1,5 @@
+[integrations.notion]
+mcp = false
+[integrations.notion.index]
+projects = "YOUR_NOTION_ID"
+memories = "YOUR_NOTION_ID"

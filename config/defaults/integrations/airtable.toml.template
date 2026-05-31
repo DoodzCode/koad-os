@@ -1,0 +1,3 @@
+[integrations.airtable.index.YOUR_TABLE_NAME]
+base_id = "YOUR_BASE_ID"
+table = "YOUR_TABLE_NAME"
