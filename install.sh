@@ -211,6 +211,39 @@ run_install() {
     BIN_DIR="$KOAD_HOME/bin"
     LOG_DIR="$KOAD_HOME/logs"
     
+    # 0b. Check for Older Versions and Clean Up
+    if [[ -d "$KOAD_HOME" || -f "/etc/systemd/system/koad-citadel.service" ]]; then
+        warn "An existing Citadel installation was detected."
+        local clean_choice="n"
+        if [[ -t 0 ]]; then
+            read -p "  Would you like to perform a clean installation (deletes older installation)? [y/N]: " clean_choice
+        fi
+        if [[ "$clean_choice" =~ ^[Yy]$ ]]; then
+            info "Cleaning up older installation..."
+            if [[ -f "scripts/uninstall.sh" ]]; then
+                ./scripts/uninstall.sh "$KOAD_HOME" --force || true
+            fi
+            sudo -n systemctl stop koad-citadel.service koad-cass.service 2>/dev/null || true
+            sudo -n systemctl disable koad-citadel.service koad-cass.service 2>/dev/null || true
+            sudo rm -f /etc/systemd/system/koad-citadel.service /etc/systemd/system/koad-cass.service
+            sudo systemctl daemon-reload
+            ok "Clean up complete."
+        else
+            info "Proceeding with standard install (existing files will be overwritten)."
+        fi
+    fi
+
+    # 0c. Prompt for Citadel Name & Captain Agent Name
+    local citadel_name="Sanctuary"
+    local captain_name="Tyr"
+    if [[ -t 0 ]]; then
+        section "Citadel Configuration"
+        read -p "  Enter your Citadel Name [Sanctuary]: " user_citadel
+        citadel_name=${user_citadel:-Sanctuary}
+        read -p "  Enter your Captain Agent Name [Tyr]: " user_captain
+        captain_name=${user_captain:-Tyr}
+    fi
+    
     # 1. Prerequisite Detection
     CURRENT_STEP="Prerequisite Detection"
     section "Prerequisite Detection"
@@ -287,6 +320,17 @@ run_install() {
         cp -r config/. "$KOAD_HOME/config/"
         ok "Configuration assets copied to $KOAD_HOME/config"
     fi
+
+    # 4b. Infrastructure Boot (Docker with CASS setup)
+    CURRENT_STEP="Infrastructure Boot"
+    section "Infrastructure Boot (Docker with CASS)"
+    info "Starting CASS, Redis, and Qdrant containers..."
+    if command -v "docker-compose" &>/dev/null; then
+        docker-compose up -d --build
+    else
+        docker compose up -d --build
+    fi
+    ok "gRPC and Docker infrastructure is online with CASS."
     
     # Deploy skills
     if [[ -d "plugin/skills" ]]; then
@@ -388,7 +432,7 @@ run_install() {
     CURRENT_STEP="Citadel Identity Initialization"
     section "Initializing Citadel Identity"
     if [[ -f "./koad-init.sh" ]]; then
-        ./koad-init.sh "$KOAD_HOME"
+        ./koad-init.sh "$KOAD_HOME" --name "$citadel_name" --captain "$captain_name"
     fi
     
     # 9. Shell Integration

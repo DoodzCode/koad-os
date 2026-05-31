@@ -17,6 +17,7 @@ section() { echo -e "\n${BOLD}[$*]${RESET}"; }
 # Argument Parsing
 FORCE=false
 CUSTOM_NAME=""
+CUSTOM_CAPTAIN=""
 POSITIONAL_ARGS=()
 
 while [[ $# -gt 0 ]]; do
@@ -25,12 +26,16 @@ while [[ $# -gt 0 ]]; do
       CUSTOM_NAME="$2"
       shift 2
       ;;
+    --captain)
+      CUSTOM_CAPTAIN="$2"
+      shift 2
+      ;;
     --force)
       FORCE=true
       shift
       ;;
     -h|--help)
-      echo "Usage: $0 [KOAD_HOME] [--name NAME] [--force]"
+      echo "Usage: $0 [KOAD_HOME] [--name NAME] [--captain CAPTAIN_NAME] [--force]"
       exit 0
       ;;
     *)
@@ -85,6 +90,14 @@ fi
 CITADEL_NAME=${CUSTOM_NAME:-Sanctuary}
 info "Initializing Citadel: $CITADEL_NAME"
 
+if [[ -z "$CUSTOM_CAPTAIN" ]]; then
+    if [[ -t 0 ]]; then
+        read -p "Enter your Captain Agent Name [Tyr]: " CUSTOM_CAPTAIN
+    fi
+fi
+CAPTAIN_NAME=${CUSTOM_CAPTAIN:-Tyr}
+info "Initializing Captain Agent: $CAPTAIN_NAME"
+
 # 2. Directory Setup
 CURRENT_STEP="Directory Setup"
 section "Directory Setup"
@@ -124,8 +137,23 @@ else
         cp blueprints/captain/SYSTEM.md "$KOAD_HOME/agents/captain/SYSTEM.md"
 
         # Customize IDENTITY.toml
+        portable_sed "s/name = \"Captain\"/name = \"$CAPTAIN_NAME\"/" "$KOAD_HOME/agents/captain/IDENTITY.toml"
         portable_sed "s/station = \"Citadel\"/station = \"$CITADEL_NAME\"/" "$KOAD_HOME/agents/captain/IDENTITY.toml"
-        ok "Captain identity initialized for $CITADEL_NAME"
+        ok "Captain identity initialized for $CITADEL_NAME ($CAPTAIN_NAME)"
+
+        # Write private agent identity file (git-ignored)
+        CAPTAIN_KEY=$(echo "$CAPTAIN_NAME" | tr '[:upper:]' '[:lower:]')
+        cat <<EOF > "$KOAD_HOME/config/identities/${CAPTAIN_KEY}.toml"
+[identities.${CAPTAIN_KEY}]
+name = "${CAPTAIN_NAME}"
+rank = "Captain"
+role = "Admin and Principal Engineer"
+bio = "Flagship KoadOS Agent. Principal Systems & Operations Engineer; Captain of the Koados ${CITADEL_NAME}. Optimized for deep memory, structural integrity, and station-wide orchestration."
+runtime = "claude"
+tier = 4
+vault = "~/.${CAPTAIN_KEY}"
+EOF
+        ok "Private agent identity file created at config/identities/${CAPTAIN_KEY}.toml"
 
         # Generate root harness context files (gitignored, machine-specific)
         GENERATED_AT="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
