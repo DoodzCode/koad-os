@@ -1,5 +1,5 @@
 # Stage 1: Build
-FROM rust:1.81-slim-bookworm AS builder
+FROM rust:1.90-slim-bookworm AS builder
 
 RUN apt-get update && apt-get install -y \
     pkg-config \
@@ -9,7 +9,7 @@ RUN apt-get update && apt-get install -y \
 
 WORKDIR /usr/src/koad-os
 
-COPY Cargo.toml ./
+COPY Cargo.toml Cargo.lock ./
 COPY crates ./crates
 COPY proto ./proto
 

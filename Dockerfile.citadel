@@ -1,5 +1,5 @@
 # Stage 1: Build
-FROM rust:1.81-slim-bookworm as builder
+FROM rust:1.90-slim-bookworm as builder
 
 # Install dependencies for compilation (including protoc for gRPC)
 RUN apt-get update && apt-get install -y \
@@ -11,10 +11,11 @@ RUN apt-get update && apt-get install -y \
 WORKDIR /usr/src/koad-os
 
 # Copy the entire workspace configuration
-COPY Cargo.toml ./
+COPY Cargo.toml Cargo.lock ./
 
-# Copy all crates (koad-cass depends on most of them)
+# Copy all crates and definitions
 COPY crates ./crates
+COPY proto ./proto
 
 # Build koad-cass in release mode
 RUN cargo build --release -p koad-cass
