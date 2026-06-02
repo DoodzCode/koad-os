@@ -69,6 +69,8 @@ impl CitadelSessionService {
             .map_err(|e| Status::internal(format!("Redis error during session hydration: {}", e)))?;
 
         let mut sessions = self.sessions.lock();
+        let mut expired_keys = Vec::new();
+
         for (key, value) in state {
             if key.starts_with("koad:session:") {
                 let sid = key.trim_start_matches("koad:session:");
@@ -92,10 +94,26 @@ impl CitadelSessionService {
                                 level: lease["level"].as_str().unwrap_or_default().to_string(),
                             },
                         );
+                    } else {
+                        expired_keys.push(key.clone());
+                        if let Some(agent_name) = lease["agent_name"].as_str() {
+                            expired_keys.push(format!("koad:kai:{}:lease", agent_name));
+                        }
                     }
                 }
             }
         }
+
+        if !expired_keys.is_empty() {
+            info!("SessionService: Purging {} expired session/lease keys from Redis.", expired_keys.len());
+            let _: Result<(), _> = self
+                .storage
+                .redis
+                .pool
+                .hdel("koad:state", expired_keys)
+                .await;
+        }
+
         info!("SessionService: Hydrated {} active sessions from Redis.", sessions.len());
         Ok(())
     }
