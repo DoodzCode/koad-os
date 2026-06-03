@@ -27,4 +27,23 @@ function agent-boot() {
 }
 export -f agent-boot
 
-# agent-prep / --agentprep is defined in ~/.pimpedbash/.bash_functions
+# agent-prep <name>
+# Preps the current interactive shell as a body for the named KoadOS agent.
+# Must be called as a shell function to propagate env vars.
+function agent-prep() {
+    local AGENT="${1:-}"
+    if [ -z "$AGENT" ]; then
+        echo "Usage: agent-prep <agent-name>" >&2
+        return 1
+    fi
+    local KOAD_CMD="koad"
+    if [ -f "$KOAD_BIN/koad" ]; then
+        KOAD_CMD="$KOAD_BIN/koad"
+    fi
+    eval "$($KOAD_CMD agent prep "$AGENT")"
+}
+export -f agent-prep
+
+# Alias --agentprep for convenience and backward compatibility
+alias -- --agentprep='agent-prep'
+

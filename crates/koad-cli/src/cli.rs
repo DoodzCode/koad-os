@@ -358,6 +358,12 @@ pub enum AgentAction {
         /// Agent name to verify.
         agent: String,
     },
+
+    /// Prep the current interactive shell as a body for the named KoadOS agent.
+    Prep {
+        /// Agent name to prepare.
+        agent: String,
+    },
 }
 
 #[derive(Subcommand)]

@@ -15,13 +15,17 @@ if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
 fi
 
 _koad_agent_boot() {
-    if [ -z "$1" ]; then
+    local agent_name="$1"
+    if [ -z "$agent_name" ]; then
+        agent_name="$KOAD_AGENT_NAME"
+    fi
+    if [ -z "$agent_name" ]; then
         echo "[agent-boot] Usage: agent-boot <agent-name>"
         return 1
     fi
 
     local _AGENT_LOWER
-    _AGENT_LOWER=$(echo "$1" | tr '[:upper:]' '[:lower:]')
+    _AGENT_LOWER=$(echo "$agent_name" | tr '[:upper:]' '[:lower:]')
     local _KOAD_HOME="$KOAD_HOME"
     local _AGENT_TOML="$_KOAD_HOME/config/identities/${_AGENT_LOWER}.toml"
     local _BRIEF_CACHE="$_KOAD_HOME/cache/session-brief-${_AGENT_LOWER}.md"
@@ -57,7 +61,7 @@ _koad_agent_boot() {
     fi
 
     # 4. Async Hydration: eval koad-agent boot output to propagate env vars
-    eval "$("$_KOAD_HOME/bin/koad-agent" boot "$1")"
+    eval "$("$_KOAD_HOME/bin/koad-agent" boot "$agent_name")"
 }
 
 _koad_agent_boot "$@"
