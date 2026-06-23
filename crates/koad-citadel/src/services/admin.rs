@@ -2,6 +2,8 @@
 //!
 //! Handles administrative and maintenance RPC calls, typically via a secure UDS.
 
+use koad_proto::cass::v1::memory_service_client::MemoryServiceClient;
+use koad_proto::cass::v1::FactCard;
 use koad_proto::citadel::v5::admin_server::Admin;
 use koad_proto::citadel::v5::*;
 use std::time::Instant;
@@ -10,17 +12,20 @@ use tonic::{Request, Response, Status};
 use tracing::{info, warn};
 
 /// Service implementation for the `Admin` gRPC interface.
+#[derive(Clone)]
 pub struct AdminService {
     shutdown_tx: watch::Sender<bool>,
     start_time: Instant,
+    cass_grpc_addr: String,
 }
 
 impl AdminService {
     /// Creates a new `AdminService`.
-    pub fn new(shutdown_tx: watch::Sender<bool>) -> Self {
+    pub fn new(shutdown_tx: watch::Sender<bool>, cass_grpc_addr: String) -> Self {
         Self {
             shutdown_tx,
             start_time: Instant::now(),
+            cass_grpc_addr,
         }
     }
 }
@@ -86,18 +91,44 @@ impl Admin for AdminService {
         }))
     }
 
-    /// Commit knowledge/learnings to the Memory Bank.
+    /// Commit knowledge/learnings to the Memory Bank via CASS.
     async fn commit_knowledge(
         &self,
         request: Request<CommitKnowledgeRequest>,
     ) -> Result<Response<StatusResponse>, Status> {
         let req = request.into_inner();
-        info!("Admin: Commit knowledge requested");
+        info!(category = %req.category, "Admin: Commit knowledge to CASS");
 
-        // Logic would go here to persist to SQLite/Redis
+        let mut cass = MemoryServiceClient::connect(self.cass_grpc_addr.clone())
+            .await
+            .map_err(|e| Status::unavailable(format!("Cannot reach CASS: {}", e)))?;
+
+        let now = chrono::Utc::now();
+        let fact = FactCard {
+            id: uuid::Uuid::new_v4().to_string(),
+            source_agent: req.context
+                .as_ref()
+                .map(|c| c.actor.clone())
+                .unwrap_or_default(),
+            session_id: req.session_id.clone(),
+            domain: req.category.clone(),
+            content: req.content.clone(),
+            confidence: 1.0,
+            tags: req.tags.split(',').map(|s| s.trim().to_string()).filter(|s| !s.is_empty()).collect(),
+            created_at: Some(prost_types::Timestamp {
+                seconds: now.timestamp(),
+                nanos: now.timestamp_subsec_nanos() as i32,
+            }),
+        };
+
+        cass.commit_fact(fact)
+            .await
+            .map_err(|e| Status::internal(format!("CASS commit_fact failed: {}", e)))?;
+
+        info!(category = %req.category, "Admin: Knowledge committed to CASS");
         Ok(Response::new(StatusResponse {
             success: true,
-            message: "Knowledge committed (Placeholder)".to_string(),
+            message: format!("Knowledge committed to CASS (category: {})", req.category),
             context: req.context,
         }))
     }

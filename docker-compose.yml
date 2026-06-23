@@ -30,12 +30,14 @@ services:
       - citadel-redis
       - qdrant
     ports:
-      - "50051:50051"
+      - "50052:50052"
     environment:
+      - KOADOS_HOME=/app/data
       - KOADOS_URL_REDIS=redis://citadel-redis:6379
-      - KOADOS_URL_QDRANT=http://qdrant:6333
+      - KOADOS_URL_QDRANT=http://qdrant:6334
     volumes:
       - cass_data:/app/data
+      - ./config/kernel.toml:/app/data/config/kernel.toml:ro
     restart: unless-stopped
 
 volumes:

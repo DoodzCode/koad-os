@@ -9,6 +9,7 @@ use crate::state::docking::DockingState;
 use crate::state::storage_bridge::CitadelStorageBridge;
 use chrono::Utc;
 use fred::interfaces::HashesInterface;
+use koad_core::config::KoadConfig;
 use koad_core::hierarchy::HierarchyManager;
 use koad_core::signal::SignalCorps;
 use koad_proto::citadel::v5::citadel_session_server::CitadelSession;
@@ -26,6 +27,7 @@ pub struct CitadelSessionService {
     storage: Arc<CitadelStorageBridge>,
     bay_store: Arc<BayStore>,
     hierarchy: Arc<HierarchyManager>,
+    config: KoadConfig,
     sessions: ActiveSessions,
     lease_duration_secs: u64,
 }
@@ -37,6 +39,7 @@ impl CitadelSessionService {
         storage: Arc<CitadelStorageBridge>,
         bay_store: Arc<BayStore>,
         hierarchy: Arc<HierarchyManager>,
+        config: KoadConfig,
         lease_duration_secs: u64,
     ) -> Self {
         Self {
@@ -44,6 +47,7 @@ impl CitadelSessionService {
             storage,
             bay_store,
             hierarchy,
+            config,
             sessions: Arc::new(Mutex::new(std::collections::HashMap::new())),
             lease_duration_secs,
         }
@@ -148,13 +152,14 @@ impl CitadelSession for CitadelSessionService {
         let project_path = std::path::Path::new(&req.project_root);
         let resolved_level = self.hierarchy.resolve_level(project_path);
 
-        let agent_rank = if agent_name.to_lowercase() == "tyr" {
-            "Captain"
-        } else {
-            "Crew"
-        };
+        let agent_rank = self
+            .config
+            .identities
+            .get(&agent_name.to_lowercase())
+            .map(|id| capitalize_first(&id.rank))
+            .unwrap_or_else(|| "Crew".to_string());
 
-        if !self.hierarchy.validate_access(agent_rank, resolved_level) {
+        if !self.hierarchy.validate_access(&agent_rank, resolved_level) {
             return Err(Status::permission_denied(format!(
                 "RANK_INSUFFICIENT: Agent '{}' (Rank: {}) cannot operate at Level {:?}",
                 agent_name, agent_rank, resolved_level
@@ -351,5 +356,13 @@ impl CitadelSession for CitadelSessionService {
         } else {
             Err(Status::not_found(format!("Session {} not found", sid)))
         }
+    }
+}
+
+fn capitalize_first(s: &str) -> String {
+    let mut chars = s.chars();
+    match chars.next() {
+        None => String::new(),
+        Some(c) => c.to_uppercase().collect::<String>() + chars.as_str(),
     }
 }

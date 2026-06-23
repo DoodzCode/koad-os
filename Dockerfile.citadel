@@ -1,5 +1,5 @@
 # Stage 1: Build
-FROM rust:1.81-slim-bookworm as builder
+FROM rust:1.96-slim-bookworm as builder
 
 # Install dependencies for compilation (including protoc for gRPC)
 RUN apt-get update && apt-get install -y \
@@ -11,10 +11,13 @@ RUN apt-get update && apt-get install -y \
 WORKDIR /usr/src/koad-os
 
 # Copy the entire workspace configuration
-COPY Cargo.toml ./
+COPY Cargo.toml Cargo.lock ./
 
 # Copy all crates (koad-cass depends on most of them)
 COPY crates ./crates
+
+# Copy proto definitions
+COPY proto ./proto
 
 # Build koad-cass in release mode
 RUN cargo build --release -p koad-cass
@@ -29,23 +32,28 @@ RUN apt-get update && apt-get install -y \
     sqlite3 \
     && rm -rf /var/lib/apt/lists/*
 
-# Create a non-root user
+# Create a non-root user and required directory structure
 RUN useradd -m koad && \
-    mkdir -p /app/data && \
+    mkdir -p /app/data/data/db /app/data/run /app/data/logs /app/data/cache && \
     chown -R koad:koad /app
 
 USER koad
 WORKDIR /app
 
-# Copy the binary from the builder stage
+# Copy the binary and entrypoint from the builder stage
 COPY --from=builder --chown=koad:koad /usr/src/koad-os/target/release/koad-cass /app/koad-cass
 
+# Entrypoint ensures required dirs exist even when a named volume overlays /app/data
+COPY --chown=koad:koad docker/entrypoint-cass.sh /app/entrypoint.sh
+
 # Environment variables for service connections (defaults)
+ENV KOADOS_HOME="/app/data"
 ENV KOADOS_URL_REDIS="redis://citadel-redis:6379"
 ENV KOADOS_URL_QDRANT="http://qdrant:6333"
 ENV RUST_LOG="info"
 
-# Expose gRPC port
-EXPOSE 50051
+# Expose CASS gRPC port
+EXPOSE 50052
 
+ENTRYPOINT ["/app/entrypoint.sh"]
 CMD ["/app/koad-cass"]

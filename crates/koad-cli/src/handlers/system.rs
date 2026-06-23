@@ -911,18 +911,23 @@ fn start_citadel_services(config: &KoadConfig) -> Result<()> {
     println!("\x1b[32m[1/2]\x1b[0m koad-citadel started.");
     std::thread::sleep(Duration::from_millis(500));
 
-    // Start CASS.
-    let mut cass_cmd = Command::new(bin_dir.join("koad-cass"));
-    cass_cmd
-        .env("KOADOS_HOME", &config.home)
-        .env("KOAD_HOME", &config.home)
-        .env_remove("RUST_LOG")
-        .stdout(open_log("cass", "out")?)
-        .stderr(open_log("cass", "error")?)
-        .spawn()
-        .context("Failed to spawn koad-cass")?;
-
-    println!("\x1b[32m[2/2]\x1b[0m koad-cass started.");
+    // Start CASS — skip if already reachable (e.g. running in Docker).
+    let cass_port = config.network.cass_grpc_port;
+    let cass_already_up = std::net::TcpStream::connect(format!("127.0.0.1:{}", cass_port)).is_ok();
+    if cass_already_up {
+        println!("\x1b[32m[2/2]\x1b[0m koad-cass already reachable on :{} (Docker).", cass_port);
+    } else {
+        let mut cass_cmd = Command::new(bin_dir.join("koad-cass"));
+        cass_cmd
+            .env("KOADOS_HOME", &config.home)
+            .env("KOAD_HOME", &config.home)
+            .env_remove("RUST_LOG")
+            .stdout(open_log("cass", "out")?)
+            .stderr(open_log("cass", "error")?)
+            .spawn()
+            .context("Failed to spawn koad-cass")?;
+        println!("\x1b[32m[2/2]\x1b[0m koad-cass started.");
+    }
 
     // Source .env for KOADOS_PAT_NOTION_MAIN etc. if present — best-effort.
     // (The spawned processes inherit this shell's env; actual secret resolution

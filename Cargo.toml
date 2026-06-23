@@ -45,7 +45,7 @@ rusqlite = { version = "0.32", features = ["bundled"] }
 fred = { version = "9.0", features = ["unix-sockets", "default-nil-types"] }
 
 # Web / Network
-reqwest = { version = "0.12", features = ["json"], default-features = true }
+reqwest = { version = "0.12", features = ["json", "rustls-tls"], default-features = false }
 axum = { version = "0.7", features = ["ws"] }
 tower-http = { version = "0.5", features = ["fs", "cors"] }
 

@@ -167,12 +167,13 @@ impl KernelBuilder {
             storage.clone(),
             bay_store.clone(),
             hierarchy.clone(),
+            config.clone(),
             config.sessions.lease_duration_secs,
         );
         let bay_svc_impl = PersonalBayService::new(bay_store.clone(), workspace_mgr.clone());
         let sector_svc_impl = SectorService::new(redis.clone(), sandbox.clone());
         let signal_svc_impl = SignalService::new(signal_corps.clone(), quota.clone());
-        let admin_svc_impl = AdminService::new(shutdown_tx.clone());
+        let admin_svc_impl = AdminService::new(shutdown_tx.clone(), config.network.cass_grpc_addr.clone());
         let xp_svc_impl = CitadelXpService::new(storage.sqlite.clone(), config.clone()).await?;
 
         let drain_storage = storage.clone();
@@ -220,7 +221,8 @@ impl KernelBuilder {
                 signal_svc_impl.clone(),
                 auth_interceptor,
             ))
-            .add_service(XpServiceServer::new(xp_svc_impl.clone()));
+            .add_service(XpServiceServer::new(xp_svc_impl.clone()))
+            .add_service(AdminServer::new(admin_svc_impl.clone()));
 
         let mut rx_tcp = shutdown_rx.clone();
         tokio::spawn(async move {

@@ -4,6 +4,8 @@ use crate::utils::errors::map_connect_err;
 use crate::utils::{detect_model_tier, feature_gate};
 use anyhow::{Context, Result};
 use koad_core::config::KoadConfig;
+use koad_proto::cass::v1::memory_service_client::MemoryServiceClient;
+use koad_proto::cass::v1::FactQuery;
 use koad_proto::citadel::v5::admin_client::AdminClient;
 use koad_proto::citadel::v5::*;
 use rusqlite::params;
@@ -24,23 +26,49 @@ pub async fn handle_intel_action(
             tags,
             agent,
         } => {
-            let results = db.query_knowledge(&term, limit, agent.as_deref())?;
             println!(
-                "
-\x1b[1m--- INTEL: Knowledge Query [{}] ---\x1b[0m",
+                "\n\x1b[1m--- INTEL: Knowledge Query [{}] ---\x1b[0m",
                 term
             );
-            for (cat, content, t, origin) in results {
-                if let Some(ref filter_tags) = tags {
-                    if !t.contains(filter_tags) {
-                        continue;
+
+            // CASS first: query semantic/fact memory from the live memory service
+            if let Ok(mut cass) = MemoryServiceClient::connect(config.network.cass_grpc_addr.clone()).await {
+                let query = FactQuery {
+                    domain: term.clone(),
+                    tags: tags.as_ref().map(|t| vec![t.clone()]).unwrap_or_default(),
+                    limit: limit as u32,
+                    min_level: 0,
+                };
+                if let Ok(resp) = cass.query_facts(query).await {
+                    let facts = resp.into_inner().facts;
+                    if !facts.is_empty() {
+                        println!("\x1b[2m[CASS]\x1b[0m");
+                        for fact in &facts {
+                            let tag_str = fact.tags.join(",");
+                            let origin = if fact.source_agent.is_empty() { "cass" } else { &fact.source_agent };
+                            println!("[{}] ({}) [{}] {}", fact.domain, tag_str, origin, fact.content);
+                        }
                     }
                 }
-                println!("[{}] ({}) [{}] {}", cat, t, origin, content);
             }
+
+            // Local SQLite fallback (best-effort — table may not exist yet)
+            if let Ok(results) = db.query_knowledge(&term, limit, agent.as_deref()) {
+                if !results.is_empty() {
+                    println!("\x1b[2m[local]\x1b[0m");
+                    for (cat, content, t, origin) in results {
+                        if let Some(ref filter_tags) = tags {
+                            if !t.contains(filter_tags) {
+                                continue;
+                            }
+                        }
+                        println!("[{}] ({}) [{}] {}", cat, t, origin, content);
+                    }
+                }
+            }
+
             println!(
-                "\x1b[1m---------------------------------------------------\x1b[0m
-"
+                "\x1b[1m---------------------------------------------------\x1b[0m\n"
             );
         }
         IntelAction::Remember { category } => {
