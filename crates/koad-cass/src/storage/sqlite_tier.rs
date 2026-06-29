@@ -41,10 +41,21 @@ impl SqliteTier {
             )",
             [],
         )?;
+        // Idempotent metadata migrations (ignore "duplicate column" on existing DBs).
+        let _ = conn.execute("ALTER TABLE fact_cards ADD COLUMN metadata_json TEXT", []);
+        let _ = conn.execute("ALTER TABLE episodic_memories ADD COLUMN metadata_json TEXT", []);
         Ok(Self {
             conn: Arc::new(Mutex::new(conn)),
         })
     }
+}
+
+fn metadata_to_json(md: &Option<koad_proto::cass::v1::MemoryMetadata>) -> Option<String> {
+    md.as_ref().and_then(|m| serde_json::to_string(m).ok())
+}
+
+fn metadata_from_json(raw: Option<String>) -> Option<koad_proto::cass::v1::MemoryMetadata> {
+    raw.and_then(|s| serde_json::from_str(&s).ok())
 }
 
 #[async_trait]
@@ -53,10 +64,11 @@ impl MemoryTier for SqliteTier {
         let conn = self.conn.lock().await;
         let tags = fact.tags.join(",");
         let created_at = Utc::now().to_rfc3339();
+        let metadata_json = metadata_to_json(&fact.metadata);
         conn.execute(
             "INSERT OR REPLACE INTO fact_cards
-             (id, source_agent, session_id, domain, content, confidence, tags, created_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+             (id, source_agent, session_id, domain, content, confidence, tags, created_at, metadata_json)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
             params![
                 fact.id,
                 fact.source_agent,
@@ -65,7 +77,8 @@ impl MemoryTier for SqliteTier {
                 fact.content,
                 fact.confidence,
                 tags,
-                created_at
+                created_at,
+                metadata_json
             ],
         )?;
         Ok(())
@@ -80,7 +93,7 @@ impl MemoryTier for SqliteTier {
         let conn = self.conn.lock().await;
         let domain_prefix = format!("{}:%", domain);
         let mut stmt = conn.prepare(
-            "SELECT id, source_agent, session_id, domain, content, confidence, tags
+            "SELECT id, source_agent, session_id, domain, content, confidence, tags, metadata_json
              FROM fact_cards
              WHERE domain = ?1 OR domain LIKE ?2
              ORDER BY confidence DESC LIMIT ?3",
@@ -99,7 +112,7 @@ impl MemoryTier for SqliteTier {
                     .map(|s| s.to_string())
                     .collect(),
                 created_at: None,
-                metadata: None,
+                metadata: metadata_from_json(row.get::<_, Option<String>>(7)?),
             })
         })?;
         let mut facts = Vec::new();
@@ -119,7 +132,7 @@ impl MemoryTier for SqliteTier {
         let mut facts = Vec::new();
         if let Some(tid) = task_id.filter(|t| !t.is_empty()) {
             let mut stmt = conn.prepare(
-                "SELECT id, source_agent, session_id, domain, content, confidence, tags
+                "SELECT id, source_agent, session_id, domain, content, confidence, tags, metadata_json
                  FROM fact_cards WHERE source_agent = ?1 AND task_ids LIKE '%' || ?2 || '%'
                  ORDER BY confidence DESC LIMIT ?3",
             )?;
@@ -137,7 +150,7 @@ impl MemoryTier for SqliteTier {
                         .map(|s| s.to_string())
                         .collect(),
                     created_at: None,
-                    metadata: None,
+                    metadata: metadata_from_json(row.get::<_, Option<String>>(7)?),
                 })
             })?;
             for row in rows {
@@ -145,7 +158,7 @@ impl MemoryTier for SqliteTier {
             }
         } else {
             let mut stmt = conn.prepare(
-                "SELECT id, source_agent, session_id, domain, content, confidence, tags
+                "SELECT id, source_agent, session_id, domain, content, confidence, tags, metadata_json
                  FROM fact_cards WHERE source_agent = ?1 ORDER BY confidence DESC LIMIT ?2",
             )?;
             let rows = stmt.query_map(params![agent_name, limit], |row| {
@@ -162,7 +175,7 @@ impl MemoryTier for SqliteTier {
                         .map(|s| s.to_string())
                         .collect(),
                     created_at: None,
-                    metadata: None,
+                    metadata: metadata_from_json(row.get::<_, Option<String>>(7)?),
                 })
             })?;
             for row in rows {
@@ -202,7 +215,7 @@ impl MemoryTier for SqliteTier {
         let pattern = format!("%{}%", query);
         let domain_prefix = format!("{}:%", partition);
         let mut stmt = conn.prepare(
-            "SELECT id, source_agent, session_id, domain, content, confidence, tags
+            "SELECT id, source_agent, session_id, domain, content, confidence, tags, metadata_json
              FROM fact_cards
              WHERE content LIKE ?1 AND (domain = ?2 OR domain LIKE ?3)
              ORDER BY confidence DESC LIMIT ?4",
@@ -221,7 +234,7 @@ impl MemoryTier for SqliteTier {
                     .map(|s| s.to_string())
                     .collect(),
                 created_at: None,
-                metadata: None,
+                metadata: metadata_from_json(row.get::<_, Option<String>>(7)?),
             })
         })?;
         let mut facts = Vec::new();
@@ -241,7 +254,7 @@ impl MemoryTier for SqliteTier {
         let mut episodes = Vec::new();
         if let Some(tid) = task_id.filter(|t| !t.is_empty()) {
             let mut stmt = conn.prepare(
-                "SELECT session_id, project_path, summary, turn_count, timestamp, task_ids
+                "SELECT session_id, project_path, summary, turn_count, timestamp, task_ids, metadata_json
                  FROM episodic_memories WHERE task_ids LIKE '%' || ?1 || '%'
                  ORDER BY timestamp DESC LIMIT ?2",
             )?;
@@ -257,7 +270,7 @@ impl MemoryTier for SqliteTier {
                         .split(',')
                         .map(|s| s.to_string())
                         .collect(),
-                    metadata: None,
+                    metadata: metadata_from_json(row.get::<_, Option<String>>(6)?),
                 })
             })?;
             for row in rows {
@@ -265,7 +278,7 @@ impl MemoryTier for SqliteTier {
             }
         } else {
             let mut stmt = conn.prepare(
-                "SELECT session_id, project_path, summary, turn_count, timestamp, task_ids
+                "SELECT session_id, project_path, summary, turn_count, timestamp, task_ids, metadata_json
                  FROM episodic_memories ORDER BY timestamp DESC LIMIT ?1",
             )?;
             let rows = stmt.query_map(params![limit], |row| {
@@ -280,7 +293,7 @@ impl MemoryTier for SqliteTier {
                         .split(',')
                         .map(|s| s.to_string())
                         .collect(),
-                    metadata: None,
+                    metadata: metadata_from_json(row.get::<_, Option<String>>(6)?),
                 })
             })?;
             for row in rows {
@@ -406,6 +419,40 @@ mod tests {
         let all = storage.query_recent_episodes("tyr", 10, None).await?;
         assert_eq!(all.len(), 2);
 
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_fact_metadata_round_trips() -> Result<()> {
+        use koad_proto::cass::v1::{MemoryMetadata, PromptBudgetHints};
+        let storage = SqliteTier::new(":memory:")?;
+        let mut f = fact("meta-001", "hermes_jupiter_ideans", "general", "card with metadata");
+        f.metadata = Some(MemoryMetadata {
+            prompt_budget: Some(PromptBudgetHints {
+                priority: "high".into(),
+                injection_mode: "summary".into(),
+                cache_stable: true,
+                ..Default::default()
+            }),
+            summary: "short form".into(),
+            ..Default::default()
+        });
+        storage.commit_fact(f).await?;
+        let got = storage.query_facts("hermes_jupiter_ideans", &[], 10).await?;
+        assert_eq!(got.len(), 1);
+        let md = got[0].metadata.as_ref().expect("metadata present");
+        assert_eq!(md.summary, "short form");
+        assert_eq!(md.prompt_budget.as_ref().unwrap().priority, "high");
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_legacy_rows_without_metadata_query_ok() -> Result<()> {
+        let storage = SqliteTier::new(":memory:")?;
+        storage.commit_fact(fact("legacy-001", "hermes_jupiter_ideans", "general", "no metadata")).await?;
+        let got = storage.query_facts("hermes_jupiter_ideans", &[], 10).await?;
+        assert_eq!(got.len(), 1);
+        assert!(got[0].metadata.is_none());
         Ok(())
     }
 }
