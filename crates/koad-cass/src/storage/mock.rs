@@ -144,3 +144,26 @@ impl MemoryTier for MockStorage {
         Ok(results)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use koad_proto::cass::v1::{FactCard, MemoryMetadata};
+
+    #[tokio::test]
+    async fn test_mock_preserves_metadata() -> Result<()> {
+        let s = MockStorage::new();
+        let f = FactCard {
+            id: "m1".into(),
+            metadata: Some(MemoryMetadata {
+                summary: "keep me".into(),
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+        s.commit_fact(f).await?;
+        let got = s.query_facts("", &[], 10).await?;
+        assert_eq!(got[0].metadata.as_ref().unwrap().summary, "keep me");
+        Ok(())
+    }
+}
