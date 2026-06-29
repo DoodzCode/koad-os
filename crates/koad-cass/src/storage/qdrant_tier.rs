@@ -204,6 +204,7 @@ impl QdrantTier {
             confidence: get_f64("confidence")? as f32,
             tags: get_str("tags")?.split(',').map(|s| s.to_string()).collect(),
             created_at: None,
+            metadata: None,
         })
     }
 
@@ -280,6 +281,7 @@ impl QdrantTier {
                 seconds: get_i64("timestamp").unwrap_or(0),
                 nanos: 0,
             }),
+            metadata: None,
         })
     }
 
@@ -495,6 +497,7 @@ impl MemoryTier for QdrantTier {
                     confidence: 1.0,
                     tags: vec!["session_summary".to_string()],
                     created_at: ep.timestamp,
+                    metadata: None,
                 };
                 scored_facts.push((p.score, fact));
             }

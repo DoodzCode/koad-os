@@ -99,6 +99,7 @@ impl MemoryTier for SqliteTier {
                     .map(|s| s.to_string())
                     .collect(),
                 created_at: None,
+                metadata: None,
             })
         })?;
         let mut facts = Vec::new();
@@ -136,6 +137,7 @@ impl MemoryTier for SqliteTier {
                         .map(|s| s.to_string())
                         .collect(),
                     created_at: None,
+                    metadata: None,
                 })
             })?;
             for row in rows {
@@ -160,6 +162,7 @@ impl MemoryTier for SqliteTier {
                         .map(|s| s.to_string())
                         .collect(),
                     created_at: None,
+                    metadata: None,
                 })
             })?;
             for row in rows {
@@ -218,6 +221,7 @@ impl MemoryTier for SqliteTier {
                     .map(|s| s.to_string())
                     .collect(),
                 created_at: None,
+                metadata: None,
             })
         })?;
         let mut facts = Vec::new();
@@ -253,6 +257,7 @@ impl MemoryTier for SqliteTier {
                         .split(',')
                         .map(|s| s.to_string())
                         .collect(),
+                    metadata: None,
                 })
             })?;
             for row in rows {
@@ -275,6 +280,7 @@ impl MemoryTier for SqliteTier {
                         .split(',')
                         .map(|s| s.to_string())
                         .collect(),
+                    metadata: None,
                 })
             })?;
             for row in rows {
@@ -300,6 +306,7 @@ mod tests {
             confidence: 1.0,
             tags: vec![partition.to_string(), topic.to_string()],
             created_at: None,
+            metadata: None,
         }
     }
 
@@ -374,6 +381,7 @@ mod tests {
                 turn_count: 5,
                 timestamp: None,
                 task_ids: vec!["task-a".to_string()],
+                metadata: None,
             })
             .await?;
 
@@ -385,6 +393,7 @@ mod tests {
                 turn_count: 5,
                 timestamp: None,
                 task_ids: vec!["task-b".to_string()],
+                metadata: None,
             })
             .await?;
 

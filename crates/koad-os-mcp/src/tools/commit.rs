@@ -116,6 +116,7 @@ impl McpToolHandler for CommitTool {
                 seconds: Utc::now().timestamp(),
                 nanos: 0,
             }),
+            metadata: None,
         };
 
         let mut client = MemoryServiceClient::connect(self.cass_url.clone()).await?;

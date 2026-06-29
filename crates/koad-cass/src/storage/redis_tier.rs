@@ -56,6 +56,7 @@ impl RedisTier {
                 .map(|s| s.to_string())
                 .collect(),
             created_at: None,
+            metadata: None,
         })
     }
 }

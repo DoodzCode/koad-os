@@ -1113,6 +1113,7 @@ pub async fn handle_context_action(
                     seconds: Local::now().timestamp(),
                     nanos: Local::now().timestamp_subsec_nanos() as i32,
                 }),
+                metadata: None,
             };
 
             let res = cass.commit_fact(req).await?.into_inner();
@@ -1246,6 +1247,7 @@ pub async fn handle_context_action(
                             seconds: Local::now().timestamp(),
                             nanos: Local::now().timestamp_subsec_nanos() as i32,
                         }),
+                        metadata: None,
                     };
 
                     if cass.commit_fact(req).await.is_ok() {
@@ -1570,6 +1572,7 @@ async fn sync_session_histories(home: &std::path::Path, cass_url: &str) -> Resul
                                         nanos: 0,
                                     }),
                                     task_ids: vec![],
+                                    metadata: None,
                                 };
 
                                 if let Err(e) = client

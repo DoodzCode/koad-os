@@ -99,6 +99,7 @@ message FactCard {
   float confidence = 6;
   repeated string tags = 7;
   google.protobuf.Timestamp created_at = 8;
+  MemoryMetadata metadata = 9;
 }
 
 message EpisodicMemory {
@@ -108,6 +109,7 @@ message EpisodicMemory {
   uint32 turn_count = 4;
   google.protobuf.Timestamp timestamp = 5;
   repeated string task_ids = 6;
+  MemoryMetadata metadata = 7;
 }
 
 message FactQuery {
@@ -126,6 +128,57 @@ message SemanticQuery {
 
 message FactResponse {
   repeated FactCard facts = 1;
+}
+
+message TokenEstimate {
+  string tokenizer = 1;       // "cl100k_base", "o200k_base", "unknown_heuristic"
+  string model_hint = 2;      // "gpt-5.5", "claude-sonnet", "llama-3.1"
+  uint32 tokens = 3;
+  string method = 4;          // "library", "heuristic", "provider_usage"
+  int64 computed_at_unix = 5; // seconds since epoch; 0 = unset
+}
+
+message PromptBudgetHints {
+  uint32 max_prompt_tokens = 1;
+  uint32 preferred_prompt_tokens = 2;
+  string injection_mode = 3;  // "verbatim", "summary", "title_only", "never_auto"
+  string priority = 4;        // "critical", "high", "normal", "low", "archive"
+  bool cache_stable = 5;
+  bool allow_compression = 6;
+}
+
+message RetrievalMetadata {
+  float salience = 1;
+  float recency_weight = 2;
+  string volatility = 3;      // "stable", "mutable", "ephemeral"
+  string audience = 4;        // "self", "agent", "team", "global"
+  string scope = 5;
+  int64 expires_at_unix = 6;  // 0 = never
+}
+
+message ProvenanceMetadata {
+  string source = 1;          // "mcp", "cli", "backfill"
+  string source_ref = 2;
+  string author_agent = 3;
+  string content_hash = 4;
+  string schema_version = 5;
+}
+
+message PrivacyMetadata {
+  string sensitivity = 1;     // "public", "internal", "private", "secret-adjacent"
+  bool contains_pii = 2;
+  bool contains_secret = 3;
+  repeated string redaction_tags = 4;
+}
+
+message MemoryMetadata {
+  repeated TokenEstimate token_estimates = 1;
+  PromptBudgetHints prompt_budget = 2;
+  RetrievalMetadata retrieval = 3;
+  ProvenanceMetadata provenance = 4;
+  PrivacyMetadata privacy = 5;
+  string summary = 6;
+  string metadata_json = 15;  // escape hatch for future keys
 }
 
 message HydrationRequest {
