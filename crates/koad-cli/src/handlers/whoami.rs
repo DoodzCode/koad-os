@@ -45,8 +45,13 @@ pub async fn handle_whoami(config: &KoadConfig, _db: &KoadDB) -> Result<()> {
         println!("\x1b[33m[Warning] KOAD_SESSION_ID is set but no matching active session was found in the Citadel.\x1b[0m");
     }
 
-    // Fallback to first identity in config
-    if let Some((_, id)) = config.identities.iter().next() {
+    // Fallback to active agent from environment or first identity in config
+    let fallback_id = env::var("KOAD_AGENT_NAME")
+        .ok()
+        .and_then(|name| config.identities.get(&name.to_lowercase()))
+        .or_else(|| config.identities.values().next());
+
+    if let Some(id) = fallback_id {
         println!(
             "\x1b[33m[NOT_TETHERED]\x1b[0m (Using local config)\nIdentity: {} [{}]\nBio:      {}",
             id.name, id.role, id.bio
@@ -54,6 +59,7 @@ pub async fn handle_whoami(config: &KoadConfig, _db: &KoadDB) -> Result<()> {
     } else {
         println!("\x1b[33m[NOT_TETHERED]\x1b[0m No identities found in config.");
     }
+
 
     Ok(())
 }

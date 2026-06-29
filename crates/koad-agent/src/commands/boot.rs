@@ -102,6 +102,26 @@ pub async fn handle_boot(
         println!("export CASS_GRPC_ADDR=\"{}\";", config.network.cass_grpc_addr);
 
         let agent_key = agent_name.to_lowercase();
+
+        // WSL GPU/CUDA path fix
+        if Path::new("/usr/lib/wsl/lib").exists() {
+            println!(
+                "export LD_LIBRARY_PATH=\"/usr/lib/wsl/lib${{LD_LIBRARY_PATH:+:${{LD_LIBRARY_PATH}}}}\";"
+            );
+        }
+
+        // Fast Display: Show the last known state immediately
+        let cache_dir = config.home.join("cache");
+        let brief_cache = cache_dir.join(format!("session-brief-{}.md", agent_key));
+        if brief_cache.exists() {
+            println!(
+                "echo -e \"\\x1b[1;30m[QUICK-RESTORE] Loading last cached brief...\\x1b[0m\";"
+            );
+            println!("cat \"{}\";", brief_cache.display());
+            println!(
+                "echo -e \"\\x1b[1;30m-------------------------------------------\\x1b[0m\";"
+            );
+        }
         let home = dirs::home_dir().unwrap_or_default();
 
         if let Some(identity_config) = identity_config {
@@ -307,12 +327,16 @@ pub async fn handle_boot(
                 agent_name,
                 cache_hash
             );
-            println!(
-                "trap \"{}/scripts/koad-telemetry.sh shutdown {} {}\" EXIT;",
-                config.home.display(),
-                agent_name,
-                cache_hash
-            );
+            // Only set EXIT trap if not running in an agent harness (which intercepts/uses EXIT traps to preserve env)
+            if std::env::var("ANTIGRAVITY_AGENT").is_err() && std::env::var("CLAUDE_CODE_ENTRYPOINT").is_err() {
+                println!(
+                    "trap \"{}/scripts/koad-telemetry.sh shutdown {} {}\" EXIT;",
+                    config.home.display(),
+                    agent_name,
+                    cache_hash
+                );
+            }
+
 
             // --- AI Anchor Generation ---
             let mut anchor_content = format!(
@@ -335,15 +359,67 @@ pub async fn handle_boot(
                 anchor_content.push_str(&cass_packet);
             }
 
-            // Batch anchor writes (Global and Local Entry Point)
-            let _ = tokio::join!(
-                safe_write_anchor(home.join(".gemini/GEMINI.md"), &anchor_content, &identity_config.name),
-                safe_write_anchor(home.join(".claude/CLAUDE.md"), &anchor_content, &identity_config.name),
-                safe_write_anchor(home.join(".codex/AGENTS.md"), &anchor_content, &identity_config.name),
-                safe_write_anchor(PathBuf::from("GEMINI.md"), &anchor_content, &identity_config.name),
-                safe_write_anchor(PathBuf::from("CLAUDE.md"), &anchor_content, &identity_config.name),
-                safe_write_anchor(PathBuf::from("AGENTS.md"), &anchor_content, &identity_config.name)
-            );
+            // Resolve bootstrap path for the target agent
+            let bootstrap_path = identity_config.bootstrap.as_ref().map(|b| {
+                let path_str = if b.starts_with('~') {
+                    b.replacen('~', &home.to_string_lossy(), 1)
+                } else {
+                    b.clone()
+                };
+                PathBuf::from(path_str)
+            }).unwrap_or_else(|| {
+                vault_path.join("GEMINI.md") // Default fallback inside the vault
+            });
+
+            // Ensure parent directory of bootstrap path exists
+            if let Some(parent) = bootstrap_path.parent() {
+                let _ = fs::create_dir_all(parent).await;
+            }
+
+            // Always write the full anchor to the agent's specific bootstrap path
+            let _ = fs::write(bootstrap_path.clone(), &anchor_content).await;
+
+            let is_gemini = identity_config.runtime.as_deref() == Some("gemini")
+                || std::env::var("KOAD_RUNTIME").as_deref() == Ok("gemini");
+
+            let is_claude = identity_config.runtime.as_deref() == Some("claude")
+                || std::env::var("KOAD_RUNTIME").as_deref() == Ok("claude");
+
+            if is_gemini {
+                let router_content = format!(
+                    "# KoadOS Agent Identity Router\n\
+                     Generated At: {}\n\n\
+                     ## Active Session Routing\n\
+                     - **Active Agent:** {}\n\
+                     - **Role:** {}\n\
+                     - **Rank:** {}\n\
+                     - **Agent Profile Vault (KAPV):** [vault](file://{})\n\
+                     - **Bootstrap Anchor:** [bootstrap](file://{})\n\n\
+                     ## Instructions\n\
+                     You are routing to the active agent profile vault (KAPV). Please IMMEDIATELY load your full identity, system protocols, and temporal context from the bootstrap anchor file:\n\
+                     [bootstrap](file://{})\n\n\
+                     Follow all instructions, protocols, and context files located within your KAPV.\n\n\
+                     ## MANDATORY: Session Hydration\n\
+                     If you have not done so, or if you need to refresh your context, run:\n\
+                     `source {}/bin/koad-functions.sh && agent-boot`\n",
+                    timestamp,
+                    identity_config.name,
+                    identity_config.role,
+                    identity_config.rank,
+                    vault_path.display(),
+                    bootstrap_path.display(),
+                    bootstrap_path.display(),
+                    config.home.display()
+                );
+                let _ = safe_write_anchor(home.join(".gemini/GEMINI.md"), &router_content, &identity_config.name).await;
+                let _ = fs::write(PathBuf::from("GEMINI.md"), &router_content).await;
+            } else if is_claude {
+                let _ = safe_write_anchor(home.join(".claude/CLAUDE.md"), &anchor_content, &identity_config.name).await;
+                let _ = fs::write(PathBuf::from("CLAUDE.md"), &anchor_content).await;
+            } else {
+                let _ = safe_write_anchor(home.join(".codex/AGENTS.md"), &anchor_content, &identity_config.name).await;
+                let _ = fs::write(PathBuf::from("AGENTS.md"), &anchor_content).await;
+            }
         } else {
             // If NO identity config, we still need a git_status for the brief below
             let git_task = tokio::spawn(async move {

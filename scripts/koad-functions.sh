@@ -12,8 +12,8 @@ if [ -z "$KOAD_RUNTIME" ]; then
     # Claude Code CLI sets CLAUDE_CODE_ENTRYPOINT in the subprocess environment
     if [ -n "$CLAUDE_CODE_ENTRYPOINT" ]; then
         export KOAD_RUNTIME="claude"
-    # Gemini CLI (Node.js) — check process ancestry for known runtime signals
-    elif [ -n "$GEMINI_API_KEY" ] || [ -n "$GOOGLE_GEMINI_API_KEY" ]; then
+    # Gemini CLI (Node.js) or Antigravity IDE/CLI — check known runtime signals
+    elif [ -n "$GEMINI_API_KEY" ] || [ -n "$GOOGLE_GEMINI_API_KEY" ] || [ -n "$ANTIGRAVITY_AGENT" ]; then
         export KOAD_RUNTIME="gemini"
     fi
 fi

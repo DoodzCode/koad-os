@@ -18,10 +18,10 @@ agent-boot [name] --full    # boot + orient + tasks + Condition Green
 
 ## How to Execute
 
-1. **Verify Identity:** Check for the `KOAD_AGENT_NAME` environment variable. 
-   - If set, use `agent-boot` without a name argument. 
-   - You SHOULD also check for `KOAD_AGENT_ROLE`, `KOAD_AGENT_RANK`, and `KOAD_AGENT_BIO` to establish your persona.
-   - If NOT set, or if you need to switch identities, run `--agentprep <name>` first, then run `agent-boot`.
+1. **Verify Identity:** The session environment variables (`KOAD_AGENT_NAME`, `KOAD_AGENT_ROLE`, `KOAD_AGENT_RANK`, `KOAD_AGENT_BIO`) are the absolute source of truth for your identity.
+   - Establish your persona and active agent name from these variables.
+   - **CRITICAL:** You must NEVER run `agent-prep` (or `--agentprep`) or modify these environment variables yourself. 
+   - Always run `agent-boot` without any name or override arguments (relying entirely on the environment's `$KOAD_AGENT_NAME`).
 
 2. **Run Boot:** Execute the following Bash command:
 

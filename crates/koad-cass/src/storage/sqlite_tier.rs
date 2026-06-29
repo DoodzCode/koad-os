@@ -78,11 +78,14 @@ impl MemoryTier for SqliteTier {
         limit: u32,
     ) -> Result<Vec<FactCard>> {
         let conn = self.conn.lock().await;
+        let domain_prefix = format!("{}:%", domain);
         let mut stmt = conn.prepare(
             "SELECT id, source_agent, session_id, domain, content, confidence, tags
-             FROM fact_cards WHERE domain = ?1 ORDER BY confidence DESC LIMIT ?2",
+             FROM fact_cards
+             WHERE domain = ?1 OR domain LIKE ?2
+             ORDER BY confidence DESC LIMIT ?3",
         )?;
-        let rows = stmt.query_map(params![domain, limit], |row| {
+        let rows = stmt.query_map(params![domain, domain_prefix, limit], |row| {
             Ok(FactCard {
                 id: row.get(0)?,
                 source_agent: row.get(1)?,
@@ -194,13 +197,14 @@ impl MemoryTier for SqliteTier {
     ) -> Result<Vec<FactCard>> {
         let conn = self.conn.lock().await;
         let pattern = format!("%{}%", query);
-        let agent_pattern = format!("%{}%", partition);
+        let domain_prefix = format!("{}:%", partition);
         let mut stmt = conn.prepare(
             "SELECT id, source_agent, session_id, domain, content, confidence, tags
-             FROM fact_cards WHERE content LIKE ?1 AND source_agent LIKE ?2
-             ORDER BY confidence DESC LIMIT ?3",
+             FROM fact_cards
+             WHERE content LIKE ?1 AND (domain = ?2 OR domain LIKE ?3)
+             ORDER BY confidence DESC LIMIT ?4",
         )?;
-        let rows = stmt.query_map(params![pattern, agent_pattern, limit], |row| {
+        let rows = stmt.query_map(params![pattern, partition, domain_prefix, limit], |row| {
             Ok(FactCard {
                 id: row.get(0)?,
                 source_agent: row.get(1)?,
@@ -284,7 +288,79 @@ impl MemoryTier for SqliteTier {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use koad_proto::cass::v1::EpisodicMemory;
+    use koad_proto::cass::v1::{EpisodicMemory, FactCard};
+
+    fn fact(id: &str, partition: &str, topic: &str, content: &str) -> FactCard {
+        FactCard {
+            id: id.to_string(),
+            source_agent: "hermes".to_string(),
+            session_id: format!("{partition}-session"),
+            domain: format!("{partition}:{topic}"),
+            content: content.to_string(),
+            confidence: 1.0,
+            tags: vec![partition.to_string(), topic.to_string()],
+            created_at: None,
+        }
+    }
+
+    #[tokio::test]
+    async fn test_query_facts_by_partition_returns_topic_domains() -> Result<()> {
+        let storage = SqliteTier::new(":memory:")?;
+        let partition = "hermes_jupiter_ideans";
+
+        storage
+            .commit_fact(fact(
+                "roundtrip-001",
+                partition,
+                "general",
+                "Hermes CASS round trip should recall partition-topic facts",
+            ))
+            .await?;
+        storage
+            .commit_fact(fact(
+                "other-001",
+                "rook_jupiter_ideans",
+                "general",
+                "Rook fact should not leak into Hermes partition recall",
+            ))
+            .await?;
+
+        let results = storage.query_facts(partition, &[], 10).await?;
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0].id, "roundtrip-001");
+        assert_eq!(results[0].domain, "hermes_jupiter_ideans:general");
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_search_semantic_filters_by_partition_domain_not_source_agent() -> Result<()> {
+        let storage = SqliteTier::new(":memory:")?;
+        let partition = "hermes_jupiter_ideans";
+
+        storage
+            .commit_fact(fact(
+                "semantic-001",
+                partition,
+                "recall",
+                "CASS semantic search should find this Hermes recall memory",
+            ))
+            .await?;
+        storage
+            .commit_fact(fact(
+                "semantic-other-001",
+                "rook_jupiter_ideans",
+                "recall",
+                "CASS semantic search should not return this other recall memory",
+            ))
+            .await?;
+
+        let results = storage.search_semantic("Hermes recall", partition, 10).await?;
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0].id, "semantic-001");
+
+        Ok(())
+    }
 
     #[tokio::test]
     async fn test_sqlite_tier_filters_by_task() -> Result<()> {
