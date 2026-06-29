@@ -175,18 +175,17 @@ impl HydrationService for CassHydrationService {
                 }
             }
 
-            let mut ranked = facts;
-            ranked.sort_by(|a, b| {
-                priority_rank(a).cmp(&priority_rank(b)).then(
-                    packing_score(b)
-                        .partial_cmp(&packing_score(a))
-                        .unwrap_or(std::cmp::Ordering::Equal),
-                )
-            });
+            fn is_stable(f: &koad_proto::cass::v1::FactCard) -> bool {
+                f.metadata
+                    .as_ref()
+                    .and_then(|m| m.prompt_budget.as_ref())
+                    .map(|p| p.cache_stable)
+                    .unwrap_or(false)
+            }
 
-            let header = "## Ⅱ. Active Fact Cards\n";
-            let mut body = String::new();
-            for fact in &ranked {
+            // Per-fact line renderer. Returns None for facts that must be skipped
+            // (injection_mode == "never_auto"). Reused for both subsections.
+            let render_line = |fact: &koad_proto::cass::v1::FactCard| -> Option<String> {
                 let mode = fact
                     .metadata
                     .as_ref()
@@ -194,7 +193,7 @@ impl HydrationService for CassHydrationService {
                     .map(|p| p.injection_mode.as_str())
                     .unwrap_or("verbatim");
                 if mode == "never_auto" {
-                    continue;
+                    return None;
                 }
                 let text = match mode {
                     "title_only" => format!("- [{}] (Conf: {:.2})\n", fact.domain, fact.confidence),
@@ -216,22 +215,74 @@ impl HydrationService for CassHydrationService {
                         fact.domain, fact.confidence, fact.content
                     ),
                 };
-                let line_tokens = count(&text) as usize;
-                if tokens_used + (count(header) as usize) + (count(&body) as usize) + line_tokens
-                    >= budget
-                {
-                    continue;
-                }
-                body.push_str(&text);
+                Some(text)
+            };
+
+            let mut ranked = facts;
+            ranked.sort_by(|a, b| {
+                priority_rank(a).cmp(&priority_rank(b)).then(
+                    packing_score(b)
+                        .partial_cmp(&packing_score(a))
+                        .unwrap_or(std::cmp::Ordering::Equal),
+                )
+            });
+
+            // Partition into cache-stable (deterministic prefix) and volatile facts.
+            // Volatile retains the Task-7 ranking order already applied to `ranked`.
+            let (mut stable, volatile): (
+                Vec<koad_proto::cass::v1::FactCard>,
+                Vec<koad_proto::cass::v1::FactCard>,
+            ) = ranked.into_iter().partition(is_stable);
+            stable.sort_by(|a, b| {
+                a.domain
+                    .cmp(&b.domain)
+                    .then(priority_rank(a).cmp(&priority_rank(b)))
+                    .then(a.id.cmp(&b.id))
+            });
+
+            // Pack a slice of facts into a section under the shared running budget.
+            let mut emit_section =
+                |header: &str,
+                 facts_slice: &[koad_proto::cass::v1::FactCard],
+                 tokens_used: &mut usize| {
+                    let mut body = String::new();
+                    let header_tokens = count(header) as usize;
+                    for fact in facts_slice {
+                        if let Some(line) = render_line(fact) {
+                            let line_tokens = count(&line) as usize;
+                            // Account for the trailing "\n" appended by the final
+                            // `format!("{header}{body}\n")` so per-line and section
+                            // accounting agree within 1 token and never over-include.
+                            if *tokens_used
+                                + header_tokens
+                                + (count(&body) as usize)
+                                + line_tokens
+                                + 1
+                                >= budget
+                            {
+                                continue;
+                            }
+                            body.push_str(&line);
+                        }
+                    }
+                    if !body.is_empty() {
+                        let section = format!("{header}{body}\n");
+                        let section_tokens = count(&section) as usize;
+                        if *tokens_used + section_tokens < budget {
+                            packet.push_str(&section);
+                            *tokens_used += section_tokens;
+                        }
+                    }
+                };
+
+            // Ⅱ-A first (cache-stable prefix region), then Ⅱ-B. When no fact is
+            // cache_stable (e.g. legacy un-backfilled DBs), Ⅱ-A is omitted and
+            // everything renders under Ⅱ-B, preserving single-section behavior.
+            // Ⅱ-B keeps the literal "Active Fact Cards" substring for back-compat.
+            if !stable.is_empty() {
+                emit_section("## Ⅱ-A. Stable Fact Cards\n", &stable, &mut tokens_used);
             }
-            if !body.is_empty() {
-                let section = format!("{header}{body}\n");
-                let section_tokens = count(&section) as usize;
-                if tokens_used + section_tokens < budget {
-                    packet.push_str(&section);
-                    tokens_used += section_tokens;
-                }
-            }
+            emit_section("## Ⅱ. Active Fact Cards\n", &volatile, &mut tokens_used);
         }
 
         // 2.5 Pending Inbox (New)
@@ -526,6 +577,98 @@ mod tests {
             !packet.contains("filler filler"),
             "verbose low-value fact should be dropped under budget"
         );
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_hydration_splits_stable_and_volatile() -> anyhow::Result<()> {
+        use koad_proto::cass::v1::{FactCard, MemoryMetadata, PromptBudgetHints};
+        let storage = Arc::new(MockStorage::new());
+        let stable_md = Some(MemoryMetadata {
+            prompt_budget: Some(PromptBudgetHints {
+                cache_stable: true,
+                ..Default::default()
+            }),
+            ..Default::default()
+        });
+        storage
+            .commit_fact(FactCard {
+                id: "s1".into(),
+                source_agent: "test-agent".into(),
+                domain: "p:identity".into(),
+                content: "Stable identity fact.".into(),
+                confidence: 1.0,
+                metadata: stable_md,
+                ..Default::default()
+            })
+            .await?;
+        storage
+            .commit_fact(FactCard {
+                id: "v1".into(),
+                source_agent: "test-agent".into(),
+                domain: "p:trivia".into(),
+                content: "Volatile trivia fact.".into(),
+                confidence: 1.0,
+                ..Default::default()
+            })
+            .await?;
+
+        let config = koad_core::config::KoadConfig::load().unwrap_or_else(|_| {
+            koad_core::config::KoadConfig::from_json(
+                r#"{
+                "home": "/tmp",
+                "system": { "version": "test" },
+                "network": { "citadel_grpc_port": 0, "citadel_grpc_addr": "", "cass_grpc_port": 0, "cass_grpc_addr": "", "redis_socket": "", "citadel_socket": "" },
+                "storage": { "db_name": "", "drain_interval_secs": 0 }
+            }"#,
+            )
+            .unwrap()
+        });
+        let hierarchy = Arc::new(HierarchyManager::new(config));
+        let codegraph = Arc::new(CodeGraph::new_with_memory()?);
+        let intelligence = Arc::new(InferenceRouter::new_default()?);
+
+        let service = CassHydrationService::new(storage, hierarchy, codegraph, intelligence);
+
+        let make_request = || {
+            Request::new(HydrationRequest {
+                agent_name: "test-agent".to_string(),
+                project_root: "/tmp".to_string(),
+                level: 0,
+                token_budget: 10000,
+                task_id: "".to_string(),
+            })
+        };
+
+        let packet1 = service
+            .hydrate(make_request())
+            .await?
+            .into_inner()
+            .markdown_packet;
+        let packet2 = service
+            .hydrate(make_request())
+            .await?
+            .into_inner()
+            .markdown_packet;
+
+        // Assert both subsection headers present:
+        assert!(packet1.contains("Ⅱ-A. Stable Fact Cards"));
+        assert!(packet1.contains("Stable identity fact."));
+        assert!(packet1.contains("Volatile trivia fact."));
+        // Stable section appears before volatile content:
+        let a_idx = packet1.find("Stable identity fact.").unwrap();
+        let b_idx = packet1.find("Volatile trivia fact.").unwrap();
+        assert!(a_idx < b_idx, "stable must precede volatile");
+        // Determinism: stable subsection identical across runs.
+        let extract_stable = |p: &str| {
+            let start = p.find("## Ⅱ-A.").unwrap();
+            p[start..]
+                .lines()
+                .take_while(|l| !l.starts_with("## Ⅱ."))
+                .collect::<Vec<_>>()
+                .join("\n")
+        };
+        assert_eq!(extract_stable(&packet1), extract_stable(&packet2));
         Ok(())
     }
 }
