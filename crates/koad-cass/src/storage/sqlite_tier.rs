@@ -189,17 +189,19 @@ impl MemoryTier for SqliteTier {
         let conn = self.conn.lock().await;
         let task_ids = episode.task_ids.join(",");
         let timestamp = Utc::now().to_rfc3339();
+        let metadata_json = metadata_to_json(&episode.metadata);
         conn.execute(
             "INSERT OR REPLACE INTO episodic_memories
-             (session_id, project_path, summary, turn_count, timestamp, task_ids)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+             (session_id, project_path, summary, turn_count, timestamp, task_ids, metadata_json)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
             params![
                 episode.session_id,
                 episode.project_path,
                 episode.summary,
                 episode.turn_count,
                 timestamp,
-                task_ids
+                task_ids,
+                metadata_json
             ],
         )?;
         Ok(())
@@ -443,6 +445,36 @@ mod tests {
         let md = got[0].metadata.as_ref().expect("metadata present");
         assert_eq!(md.summary, "short form");
         assert_eq!(md.prompt_budget.as_ref().unwrap().priority, "high");
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_episode_metadata_round_trips() -> Result<()> {
+        use koad_proto::cass::v1::{EpisodicMemory, MemoryMetadata, TokenEstimate};
+        let storage = SqliteTier::new(":memory:")?;
+        storage
+            .record_episode(EpisodicMemory {
+                session_id: "S-meta".into(),
+                project_path: "/x".into(),
+                summary: "episode summary".into(),
+                turn_count: 1,
+                timestamp: None,
+                task_ids: vec![],
+                metadata: Some(MemoryMetadata {
+                    token_estimates: vec![TokenEstimate {
+                        tokens: 3,
+                        ..Default::default()
+                    }],
+                    ..Default::default()
+                }),
+            })
+            .await?;
+        let got = storage.query_recent_episodes("any", 10, None).await?;
+        assert_eq!(got.len(), 1);
+        assert_eq!(
+            got[0].metadata.as_ref().unwrap().token_estimates[0].tokens,
+            3
+        );
         Ok(())
     }
 
