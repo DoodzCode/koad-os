@@ -13,6 +13,7 @@
 - [ ] Add owner metadata and last-reviewed dates to legacy docs.
 
 ## 🛠️ Recent Accomplishments
+- **CASS Token-Aware Memory Metadata (P2):** Added an optional, backward-compatible `MemoryMetadata` layer to CASS memories (token estimates, prompt-budget hints, retrieval/provenance/privacy) persisted in SQLite L2 + carried through L1 Redis, auto-populated at the gRPC commit choke point, surfaced via `memory.commit`/recall/search, and consumed by hydration for budget-aware, cache-stable prompt packing. Includes an offline `backfill_metadata` binary. See `docs/cass-memory-metadata.md`.
 - **Unified Installer & Updater (P1):** Created a single root entrypoint `install.sh` supporting both `--install` (clean setups) and `--update` (automated system-wide upgrades).
 - **Private Identity Isolation (P2):** Hardened `.gitignore` and cached indexes to ensure private Citadel metadata (`config/identities/*.toml`) is never leaked via git.
 - **Shell-Crash Protection (P1):** Restructured shell script headers (`install.sh`, `koad-init.sh`, `koad-setup.sh`, `scripts/uninstall.sh`) so that sourcing checks occur before `set -euo pipefail`, preventing interactive shell terminations.

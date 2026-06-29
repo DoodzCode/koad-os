@@ -94,6 +94,7 @@ async fn main() -> Result<()> {
                 seconds: Utc::now().timestamp(),
                 nanos: 0,
             }),
+            metadata: None,
         };
 
         match client.commit_fact(fact).await {
@@ -123,6 +124,7 @@ async fn main() -> Result<()> {
                 nanos: 0,
             }),
             task_ids: vec![],
+            metadata: None,
         };
 
         match client.record_episode(episode).await {

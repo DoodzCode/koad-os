@@ -153,6 +153,7 @@ mod tests {
             confidence: 0.9,
             tags: vec!["test".to_string()],
             created_at: None,
+            metadata: None,
         };
 
         // Write through all tiers

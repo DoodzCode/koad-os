@@ -94,6 +94,7 @@ impl EndOfWatchPipeline {
                 nanos: 0,
             }),
             task_ids: vec![],
+            metadata: None,
         };
 
         if let Err(e) = self.storage.record_episode(episode).await {

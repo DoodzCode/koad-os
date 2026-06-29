@@ -100,6 +100,7 @@ pub async fn handle_import(
                             seconds: Utc::now().timestamp(),
                             nanos: Utc::now().timestamp_subsec_nanos() as i32,
                         }),
+                        metadata: None,
                     };
                     let response = c.commit_fact(request).await?.into_inner();
                     if !response.success {
