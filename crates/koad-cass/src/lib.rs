@@ -5,6 +5,7 @@
 
 pub mod services;
 pub mod storage;
+pub mod token_budget;
 #[cfg(test)]
 pub mod mock_storage {
     pub use crate::storage::mock::MockStorage;
