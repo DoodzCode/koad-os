@@ -37,6 +37,7 @@ impl RedisTier {
             "session_id": fact.session_id,
             "confidence": fact.confidence,
             "tags": fact.tags.join(","),
+            "metadata": fact.metadata, // Option<MemoryMetadata> serializes to null when None
         })
         .to_string()
     }
@@ -56,7 +57,7 @@ impl RedisTier {
                 .map(|s| s.to_string())
                 .collect(),
             created_at: None,
-            metadata: None,
+            metadata: serde_json::from_value(v["metadata"].clone()).ok().flatten(),
         })
     }
 }
@@ -287,5 +288,33 @@ mod tests {
             .await?;
 
         Ok(())
+    }
+
+    #[test]
+    fn test_redis_fact_serialize_roundtrip_preserves_metadata() {
+        use koad_proto::cass::v1::{FactCard, MemoryMetadata};
+        let mut f = FactCard::default();
+        f.id = "r1".into();
+        f.domain = "test".into();
+        f.metadata = Some(MemoryMetadata {
+            summary: "keep me".into(),
+            ..Default::default()
+        });
+
+        let json = RedisTier::fact_to_json(&f);
+        assert!(json.contains("keep me"));
+
+        let parsed = RedisTier::json_to_fact(&json).expect("parse should succeed");
+        let meta = parsed.metadata.expect("metadata should survive round-trip");
+        assert_eq!(meta.summary, "keep me");
+        assert_eq!(parsed.id, "r1");
+    }
+
+    #[test]
+    fn test_redis_fact_legacy_entry_without_metadata_parses_to_none() {
+        // Legacy cache entries lack the "metadata" key; they must yield None, not error.
+        let legacy = r#"{"id":"old1","domain":"d","content":"c","source_agent":"a","session_id":"s","confidence":0.5,"tags":""}"#;
+        let parsed = RedisTier::json_to_fact(legacy).expect("legacy parse should succeed");
+        assert!(parsed.metadata.is_none());
     }
 }
