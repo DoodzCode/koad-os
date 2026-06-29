@@ -29,6 +29,11 @@ impl McpToolHandler for RecallTool {
                         "type": "integer",
                         "description": "Max number of cards to return (default 10)",
                         "default": 10
+                    },
+                    "include_metadata": {
+                        "type": "boolean",
+                        "description": "Append a compact metadata line per card (token estimate, priority, injection mode, salience, volatility, sensitivity). Default false to keep output lean.",
+                        "default": false
                     }
                 },
                 "required": []
@@ -38,6 +43,10 @@ impl McpToolHandler for RecallTool {
 
     async fn call(&self, params: Value) -> Result<McpToolCallResponse> {
         let limit = params.get("limit").and_then(|v| v.as_u64()).unwrap_or(10) as u32;
+        let include_metadata = params
+            .get("include_metadata")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
 
         let mut client = MemoryServiceClient::connect(self.cass_url.clone()).await?;
         let resp = client
@@ -55,7 +64,16 @@ impl McpToolHandler for RecallTool {
         } else {
             resp.facts
                 .iter()
-                .map(|f| format!("**[{}]** {}\n_{}_", f.domain, f.content, f.id))
+                .map(|f| {
+                    let mut line = format!("**[{}]** {}\n_{}_", f.domain, f.content, f.id);
+                    if include_metadata {
+                        if let Some(md) = f.metadata.as_ref() {
+                            line.push('\n');
+                            line.push_str(&crate::tools::render_metadata_compact(md));
+                        }
+                    }
+                    line
+                })
                 .collect::<Vec<_>>()
                 .join("\n\n---\n\n")
         };
