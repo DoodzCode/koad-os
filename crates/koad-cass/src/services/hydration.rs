@@ -157,19 +157,80 @@ impl HydrationService for CassHydrationService {
             .map_err(|e| Status::internal(e.to_string()))?;
 
         if !facts.is_empty() {
-            let mut fact_section = "## Ⅱ. Active Fact Cards\n".to_string();
-            for fact in facts {
-                fact_section.push_str(&format!(
-                    "- [{}] (Conf: {:.2}): {}\n",
-                    fact.domain, fact.confidence, fact.content
-                ));
-            }
-            fact_section.push_str("\n");
+            use crate::token_budget::{count, packing_score};
 
-            let section_tokens = count_tokens(&fact_section);
-            if tokens_used + section_tokens < budget {
-                packet.push_str(&fact_section);
-                tokens_used += section_tokens;
+            fn priority_rank(f: &koad_proto::cass::v1::FactCard) -> u8 {
+                match f
+                    .metadata
+                    .as_ref()
+                    .and_then(|m| m.prompt_budget.as_ref())
+                    .map(|p| p.priority.as_str())
+                {
+                    Some("critical") => 0,
+                    Some("high") => 1,
+                    Some("normal") | None => 2,
+                    Some("low") => 3,
+                    Some("archive") => 4,
+                    Some(_) => 2,
+                }
+            }
+
+            let mut ranked = facts;
+            ranked.sort_by(|a, b| {
+                priority_rank(a).cmp(&priority_rank(b)).then(
+                    packing_score(b)
+                        .partial_cmp(&packing_score(a))
+                        .unwrap_or(std::cmp::Ordering::Equal),
+                )
+            });
+
+            let header = "## Ⅱ. Active Fact Cards\n";
+            let mut body = String::new();
+            for fact in &ranked {
+                let mode = fact
+                    .metadata
+                    .as_ref()
+                    .and_then(|m| m.prompt_budget.as_ref())
+                    .map(|p| p.injection_mode.as_str())
+                    .unwrap_or("verbatim");
+                if mode == "never_auto" {
+                    continue;
+                }
+                let text = match mode {
+                    "title_only" => format!("- [{}] (Conf: {:.2})\n", fact.domain, fact.confidence),
+                    "summary" => {
+                        let s = fact
+                            .metadata
+                            .as_ref()
+                            .map(|m| m.summary.as_str())
+                            .filter(|s| !s.is_empty());
+                        format!(
+                            "- [{}] (Conf: {:.2}): {}\n",
+                            fact.domain,
+                            fact.confidence,
+                            s.unwrap_or(&fact.content)
+                        )
+                    }
+                    _ => format!(
+                        "- [{}] (Conf: {:.2}): {}\n",
+                        fact.domain, fact.confidence, fact.content
+                    ),
+                };
+                let line_tokens = count(&text) as usize;
+                if tokens_used + (count(header) as usize) + (count(&body) as usize) + line_tokens
+                    >= budget
+                {
+                    continue;
+                }
+                body.push_str(&text);
+            }
+            if !body.is_empty() {
+                let section = format!("{header}{body}\n");
+                let section_tokens = count(&section) as usize;
+                if tokens_used + section_tokens < budget {
+                    packet.push_str(&section);
+                    tokens_used += section_tokens;
+                }
             }
         }
 
@@ -398,6 +459,72 @@ mod tests {
         assert!(
             packet.contains("Test pulse active"),
             "TCH packet missing pulse message"
+        );
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn test_hydration_prefers_concise_high_value_under_budget() -> anyhow::Result<()> {
+        use koad_proto::cass::v1::FactCard;
+        let storage = Arc::new(MockStorage::new());
+        storage
+            .commit_fact(FactCard {
+                id: "concise".into(),
+                source_agent: "test-agent".into(),
+                domain: "p:identity".into(),
+                content: "Key fact alpha.".into(),
+                confidence: 1.0,
+                ..Default::default()
+            })
+            .await?;
+        storage
+            .commit_fact(FactCard {
+                id: "verbose".into(),
+                source_agent: "test-agent".into(),
+                domain: "p:trivia".into(),
+                content: format!("{} zulu", "filler ".repeat(400)),
+                confidence: 0.3,
+                ..Default::default()
+            })
+            .await?;
+
+        let config = koad_core::config::KoadConfig::load().unwrap_or_else(|_| {
+            koad_core::config::KoadConfig::from_json(
+                r#"{
+                "home": "/tmp",
+                "system": { "version": "test" },
+                "network": { "citadel_grpc_port": 0, "citadel_grpc_addr": "", "cass_grpc_port": 0, "cass_grpc_addr": "", "redis_socket": "", "citadel_socket": "" },
+                "storage": { "db_name": "", "drain_interval_secs": 0 }
+            }"#,
+            )
+            .unwrap()
+        });
+        let hierarchy = Arc::new(HierarchyManager::new(config));
+        let codegraph = Arc::new(CodeGraph::new_with_memory()?);
+        let intelligence = Arc::new(InferenceRouter::new_default()?);
+
+        let service = CassHydrationService::new(storage, hierarchy, codegraph, intelligence);
+
+        // Budget large enough for the TCH header + fact header + the concise fact,
+        // but far too small for the ~400-token verbose fact.
+        let request = Request::new(HydrationRequest {
+            agent_name: "test-agent".to_string(),
+            project_root: "/tmp".to_string(),
+            level: 0,
+            token_budget: 60,
+            task_id: "".to_string(),
+        });
+
+        let response = service.hydrate(request).await?;
+        let packet = response.into_inner().markdown_packet;
+
+        assert!(
+            packet.contains("Key fact alpha."),
+            "concise high-value fact should be packed under budget"
+        );
+        assert!(
+            !packet.contains("filler filler"),
+            "verbose low-value fact should be dropped under budget"
         );
         Ok(())
     }
