@@ -35,3 +35,7 @@ koad-plugins = { path = "../koad-plugins" }
 [[bin]]
 name = "koad-cass"
 path = "src/main.rs"
+
+[[bin]]
+name = "backfill_metadata"
+path = "src/bin/backfill_metadata.rs"
