@@ -9,7 +9,7 @@ use crate::storage::MemoryTier;
 use anyhow::{Context, Result};
 use async_trait::async_trait;
 use koad_intelligence::router::InferenceRouter;
-use koad_proto::cass::v1::{EpisodicMemory, FactCard};
+use koad_proto::cass::v1::{EpisodicMemory, FactCard, MemoryMetadata};
 use qdrant_client::qdrant::{
     value::Kind, Condition, CreateCollectionBuilder, Distance, Filter, PointStruct,
     ScrollPointsBuilder, SearchPointsBuilder, UpsertPointsBuilder, VectorParamsBuilder,
@@ -23,6 +23,17 @@ use std::sync::Arc;
 const COLLECTION: &str = "fact_cards";
 const EPISODE_COLLECTION: &str = "episodic_memories";
 const VECTOR_DIM: u64 = 32;
+
+/// Serialize optional metadata to a JSON string for Qdrant payload storage.
+/// Mirrors the L2 SQLite tier so both tiers round-trip metadata identically.
+fn metadata_to_json(md: &Option<MemoryMetadata>) -> Option<String> {
+    md.as_ref().and_then(|m| serde_json::to_string(m).ok())
+}
+
+/// Deserialize metadata from a Qdrant payload JSON string. Absent/invalid → None.
+fn metadata_from_json(raw: Option<String>) -> Option<MemoryMetadata> {
+    raw.and_then(|s| serde_json::from_str(&s).ok())
+}
 
 pub struct QdrantTier {
     client: Option<Qdrant>,
@@ -176,6 +187,14 @@ impl QdrantTier {
                 kind: Some(Kind::StringValue(fact.tags.join(","))),
             },
         );
+        if let Some(json) = metadata_to_json(&fact.metadata) {
+            p.insert(
+                "metadata_json".into(),
+                Value {
+                    kind: Some(Kind::StringValue(json)),
+                },
+            );
+        }
         p
     }
 
@@ -204,7 +223,7 @@ impl QdrantTier {
             confidence: get_f64("confidence")? as f32,
             tags: get_str("tags")?.split(',').map(|s| s.to_string()).collect(),
             created_at: None,
-            metadata: None,
+            metadata: metadata_from_json(get_str("metadata_json")),
         })
     }
 
@@ -248,6 +267,14 @@ impl QdrantTier {
                 kind: Some(Kind::IntegerValue(seconds)),
             },
         );
+        if let Some(json) = metadata_to_json(&episode.metadata) {
+            p.insert(
+                "metadata_json".into(),
+                Value {
+                    kind: Some(Kind::StringValue(json)),
+                },
+            );
+        }
         p
     }
 
@@ -281,7 +308,7 @@ impl QdrantTier {
                 seconds: get_i64("timestamp").unwrap_or(0),
                 nanos: 0,
             }),
-            metadata: None,
+            metadata: metadata_from_json(get_str("metadata_json")),
         })
     }
 
@@ -514,5 +541,68 @@ impl MemoryTier for QdrantTier {
             .collect();
 
         Ok(merged)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::QdrantTier;
+    use koad_proto::cass::v1::{EpisodicMemory, FactCard, MemoryMetadata, TokenEstimate};
+
+    fn sample_metadata() -> MemoryMetadata {
+        MemoryMetadata {
+            summary: "round-trip probe".to_string(),
+            token_estimates: vec![TokenEstimate {
+                tokenizer: "cl100k_base".to_string(),
+                tokens: 42,
+                method: "library".to_string(),
+                ..Default::default()
+            }],
+            ..Default::default()
+        }
+    }
+
+    fn sample_fact(metadata: Option<MemoryMetadata>) -> FactCard {
+        FactCard {
+            id: "f1".to_string(),
+            source_agent: "clyde".to_string(),
+            session_id: "s1".to_string(),
+            domain: "test".to_string(),
+            content: "hello".to_string(),
+            confidence: 0.9,
+            tags: vec!["a".to_string(), "b".to_string()],
+            created_at: None,
+            metadata,
+        }
+    }
+
+    #[test]
+    fn fact_metadata_survives_payload_round_trip() {
+        let payload = QdrantTier::make_payload(&sample_fact(Some(sample_metadata())));
+        let restored = QdrantTier::payload_to_fact(&payload).expect("fact restores");
+        assert_eq!(restored.metadata, Some(sample_metadata()));
+    }
+
+    #[test]
+    fn fact_without_metadata_round_trips_as_none() {
+        let payload = QdrantTier::make_payload(&sample_fact(None));
+        let restored = QdrantTier::payload_to_fact(&payload).expect("fact restores");
+        assert_eq!(restored.metadata, None);
+    }
+
+    #[test]
+    fn episode_metadata_survives_payload_round_trip() {
+        let ep = EpisodicMemory {
+            session_id: "s1".to_string(),
+            project_path: "/tmp".to_string(),
+            summary: "did things".to_string(),
+            turn_count: 3,
+            timestamp: None,
+            task_ids: vec!["t1".to_string()],
+            metadata: Some(sample_metadata()),
+        };
+        let payload = QdrantTier::make_episode_payload(&ep);
+        let restored = QdrantTier::payload_to_episode(&payload).expect("episode restores");
+        assert_eq!(restored.metadata, Some(sample_metadata()));
     }
 }
