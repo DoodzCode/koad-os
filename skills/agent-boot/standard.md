@@ -10,10 +10,11 @@ Use for: normal session open.
 source "$KOAD_HOME/bin/koad-functions.sh" && agent-boot
 ```
 
-2. **Hydrate Persona:** establish your identity from session environment variables:
+2. **Hydrate Persona:** Establish your identity from the session environment variables:
    - Check `$KOAD_AGENT_NAME`, `$KOAD_AGENT_ROLE`, `$KOAD_AGENT_RANK`, `$KOAD_AGENT_BIO`.
-   - If these are present, prioritize them over any static `GEMINI.md` identity anchor.
-   - If they differ from the local `GEMINI.md`, update the `GEMINI.md` identity anchor section to match the current session.
+   - These environment variables are the absolute source of truth. Prioritize them over any static local `GEMINI.md` identity file.
+   - If they differ from the local `GEMINI.md`, update the `GEMINI.md` identity anchor section to match the current session environment.
+   - Under no circumstances should the agent run `agent-prep` or modify environment variables to change its identity.
 
 3. Run situational awareness:
 

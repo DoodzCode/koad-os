@@ -75,6 +75,7 @@ pub async fn handle_agent_action(action: AgentAction, config: &KoadConfig) -> Re
         AgentAction::List => handle_list_agents(config).await,
         AgentAction::Info { agent } => handle_agent_info(&agent, config).await,
         AgentAction::Verify { agent } => handle_agent_verify(&agent, config).await,
+        AgentAction::Prep { agent } => handle_agent_prep(&agent, config).await,
     }
 }
 
@@ -972,6 +973,118 @@ fn extract_focus(role: &str) -> String {
         Some(i) => format!("{}...", &truncated[..i]),
         None => format!("{}...", truncated),
     }
+}
+
+async fn handle_agent_prep(agent: &str, config: &KoadConfig) -> Result<()> {
+    let key = agent.to_lowercase();
+    let id = config.identities.get(&key).with_context(|| {
+        format!(
+            "No identity found for '{}'. Check config/identities/{}.toml",
+            agent, key
+        )
+    })?;
+
+    // Output to stderr to avoid polluting stdout (stdout is captured by eval)
+    eprintln!("\n\x1b[1;34m--- KoadOS Agent Prep: {} ---\x1b[0m", id.name);
+    eprintln!("  Role:    {}", id.role);
+    eprintln!("  Rank:    {}", id.rank);
+    eprintln!("  XP:      {}", id.xp);
+
+    let home_dir = dirs::home_dir().context("Could not determine home directory.")?;
+    let vault_path = if let Some(v) = &id.vault {
+        if v.starts_with('~') {
+            v.replacen('~', &home_dir.to_string_lossy(), 1)
+        } else {
+            v.clone()
+        }
+    } else {
+        config.agent_dir(&key).to_string_lossy().into_owned()
+    };
+
+    let bootstrap_path = id.bootstrap.as_ref().map(|b| {
+        if b.starts_with('~') {
+            b.replacen('~', &home_dir.to_string_lossy(), 1)
+        } else {
+            b.clone()
+        }
+    });
+
+    // Output env variables directly to stdout for shell to eval
+    println!("export KOAD_AGENT_NAME=\"{}\";", id.name);
+    println!("export KOAD_AGENT_RANK=\"{}\";", id.rank);
+    println!("export KOAD_AGENT_ROLE=\"{}\";", id.role);
+    println!("export KOAD_AGENT_BIO=\"{}\";", id.bio);
+    println!("export KOAD_AGENT_XP=\"{}\";", id.xp);
+    println!("export KOAD_VAULT_PATH=\"{}\";", vault_path);
+
+    if let Some(ref run) = id.runtime {
+        println!("export KOAD_RUNTIME=\"{}\";", run);
+    }
+    if let Some(ref bs) = bootstrap_path {
+        println!("export KOAD_BOOTSTRAP=\"{}\";", bs);
+    }
+
+    // Resolve and export access keys
+    if let Some(prefs) = &id.preferences {
+        if !prefs.access_keys.is_empty() {
+            eprintln!("  Resolving access keys:");
+            for key_id in &prefs.access_keys {
+                let resolved = config.resolve_secret(key_id, None);
+                if !resolved.is_empty() {
+                    println!("export {}={:?};", key_id, resolved);
+                    eprintln!("      \x1b[32m✓\x1b[0m {}", key_id);
+                } else {
+                    eprintln!("      \x1b[33m⚠\x1b[0m {} (not resolved)", key_id);
+                }
+            }
+        }
+    }
+
+    // HISTFILE isolation
+    let session_dir = PathBuf::from(&vault_path).join("sessions");
+    if session_dir.exists() {
+        println!("export HISTFILE=\"{}/bash_history\";", session_dir.to_string_lossy());
+        eprintln!("  Histfile: {}/bash_history", session_dir.to_string_lossy());
+    }
+
+    // Service status check
+    eprintln!("  Checking Citadel pulse:");
+    let local_koad_home = std::env::var("KOADOS_HOME")
+        .or_else(|_| std::env::var("KOAD_HOME"))
+        .unwrap_or_else(|_| format!("{}/.citadel-jupiter", home_dir.to_string_lossy()));
+    let kh_path = PathBuf::from(local_koad_home);
+
+    let socket_1 = kh_path.join("run/koad.sock");
+    let socket_2 = kh_path.join("koad.sock");
+    let redis_pass = socket_1.exists() || socket_2.exists();
+    
+    let redis_ok = redis_pass || std::net::TcpStream::connect("127.0.0.1:6379").is_ok();
+    let grpc_ok = std::net::TcpStream::connect("127.0.0.1:50051").is_ok();
+    let cass_ok = std::net::TcpStream::connect("127.0.0.1:50052").is_ok();
+
+    if redis_ok {
+        eprintln!("      Redis  (UDS/TCP):  \x1b[32m[PASS]\x1b[0m");
+    } else {
+        eprintln!("      Redis  (UDS/TCP):  \x1b[31m[FAIL]\x1b[0m");
+    }
+
+    if grpc_ok {
+        eprintln!("      Citadel gRPC:      \x1b[32m[PASS]\x1b[0m");
+    } else {
+        eprintln!("      Citadel gRPC:      \x1b[33m[WARN]\x1b[0m (dark mode)");
+    }
+
+    if cass_ok {
+        eprintln!("      CASS    gRPC:      \x1b[32m[PASS]\x1b[0m");
+    } else {
+        eprintln!("      CASS    gRPC:      \x1b[33m[WARN]\x1b[0m (dark mode)");
+    }
+
+    eprintln!("--------------------------------------------------");
+    eprintln!("  Shell ready. Launch CLI or run: \x1b[1magent-boot {}\x1b[0m", id.name);
+    eprintln!("--------------------------------------------------");
+
+    Ok(())
 }
 
 #[cfg(test)]

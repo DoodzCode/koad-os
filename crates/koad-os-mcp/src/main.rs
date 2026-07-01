@@ -1,6 +1,12 @@
 use anyhow::Result;
-use axum::{extract::State, http::StatusCode, routing::post, Json, Router};
-use koad_mcp::{JsonRpcRequest, JsonRpcResponse, McpServer};
+use axum::{
+    extract::State,
+    http::{HeaderMap, StatusCode},
+    response::IntoResponse,
+    routing::post,
+    Json, Router,
+};
+use koad_mcp::{JsonRpcRequest, McpServer};
 use std::{net::SocketAddr, sync::Arc};
 use tokio::net::TcpListener;
 use tools::commit::CommitTool;
@@ -33,7 +39,7 @@ async fn main() -> Result<()> {
 
     tracing::info!(partition = %partition, mode = %mcp_mode, transport = %transport, "Rook MCP starting");
 
-    let mut server = McpServer::new("rook", "0.1.0");
+    let mut server = McpServer::new(&agent_name, "0.1.0");
     server.register_tool(RecallTool::new(cass_url.clone(), partition.clone()));
     server.register_tool(SearchSemanticTool::new(cass_url.clone(), partition.clone()));
     server.register_tool(ListTopicsTool::new(cass_url.clone(), partition.clone()));
@@ -69,8 +75,39 @@ async fn main() -> Result<()> {
 
 async fn handle_mcp(
     State(state): State<AppState>,
+    headers: HeaderMap,
     Json(req): Json<JsonRpcRequest>,
-) -> Result<Json<JsonRpcResponse>, (StatusCode, String)> {
+) -> impl IntoResponse {
+    tracing::info!(method = %req.method, id = ?req.id, "MCP request");
+    if req.method.starts_with("notifications/") {
+        return (StatusCode::ACCEPTED, "").into_response();
+    }
+
     let resp = state.server.handle_request(req).await;
-    Ok(Json(resp))
+    let json_body = serde_json::to_string(&resp).unwrap_or_default();
+
+    let accept = headers
+        .get("accept")
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("");
+
+    if accept.contains("text/event-stream") {
+        let sse_body = format!("data: {}\n\n", json_body);
+        (
+            StatusCode::OK,
+            [
+                ("content-type", "text/event-stream"),
+                ("cache-control", "no-cache"),
+            ],
+            sse_body,
+        )
+            .into_response()
+    } else {
+        (
+            StatusCode::OK,
+            [("content-type", "application/json")],
+            json_body,
+        )
+            .into_response()
+    }
 }

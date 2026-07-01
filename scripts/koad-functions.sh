@@ -12,8 +12,8 @@ if [ -z "$KOAD_RUNTIME" ]; then
     # Claude Code CLI sets CLAUDE_CODE_ENTRYPOINT in the subprocess environment
     if [ -n "$CLAUDE_CODE_ENTRYPOINT" ]; then
         export KOAD_RUNTIME="claude"
-    # Gemini CLI (Node.js) — check process ancestry for known runtime signals
-    elif [ -n "$GEMINI_API_KEY" ] || [ -n "$GOOGLE_GEMINI_API_KEY" ]; then
+    # Gemini CLI (Node.js) or Antigravity IDE/CLI — check known runtime signals
+    elif [ -n "$GEMINI_API_KEY" ] || [ -n "$GOOGLE_GEMINI_API_KEY" ] || [ -n "$ANTIGRAVITY_AGENT" ]; then
         export KOAD_RUNTIME="gemini"
     fi
 fi
@@ -27,4 +27,23 @@ function agent-boot() {
 }
 export -f agent-boot
 
-# agent-prep / --agentprep is defined in ~/.pimpedbash/.bash_functions
+# agent-prep <name>
+# Preps the current interactive shell as a body for the named KoadOS agent.
+# Must be called as a shell function to propagate env vars.
+function agent-prep() {
+    local AGENT="${1:-}"
+    if [ -z "$AGENT" ]; then
+        echo "Usage: agent-prep <agent-name>" >&2
+        return 1
+    fi
+    local KOAD_CMD="koad"
+    if [ -f "$KOAD_BIN/koad" ]; then
+        KOAD_CMD="$KOAD_BIN/koad"
+    fi
+    eval "$($KOAD_CMD agent prep "$AGENT")"
+}
+export -f agent-prep
+
+# Alias --agentprep for convenience and backward compatibility
+alias -- --agentprep='agent-prep'
+

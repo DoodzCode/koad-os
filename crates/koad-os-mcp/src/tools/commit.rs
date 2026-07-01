@@ -4,6 +4,7 @@ use chrono::Utc;
 use koad_mcp::{McpContent, McpTool, McpToolCallResponse, McpToolHandler};
 use koad_proto::cass::v1::memory_service_client::MemoryServiceClient;
 use koad_proto::cass::v1::FactCard;
+use koad_proto::cass::v1::{MemoryMetadata, PromptBudgetHints, RetrievalMetadata, PrivacyMetadata};
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 
@@ -55,7 +56,15 @@ impl McpToolHandler for CommitTool {
                         "description": "Confidence score 0.0–1.0. Use 1.0 for confirmed facts, \
                             lower for inferred or uncertain information. Default 1.0.",
                         "default": 1.0
-                    }
+                    },
+                    "summary": { "type": "string", "description": "Short alternate injection text for long cards." },
+                    "priority": { "type": "string", "enum": ["critical","high","normal","low","archive"], "description": "Prompt-packing priority. Default normal." },
+                    "injection_mode": { "type": "string", "enum": ["verbatim","summary","title_only","never_auto"], "description": "How this card is injected during hydration." },
+                    "max_prompt_tokens": { "type": "integer", "minimum": 0, "description": "Hard cap on tokens when this card is injected." },
+                    "preferred_prompt_tokens": { "type": "integer", "minimum": 0, "description": "Target token budget for this card." },
+                    "salience": { "type": "number", "minimum": 0.0, "maximum": 1.0, "description": "Durable usefulness 0..1. Defaults to confidence." },
+                    "volatility": { "type": "string", "enum": ["stable","mutable","ephemeral"], "description": "How fast this fact goes stale." },
+                    "sensitivity": { "type": "string", "enum": ["public","internal","private","secret-adjacent"], "description": "Privacy class for prompt-packing." }
                 },
                 "required": ["content"]
             }),
@@ -116,6 +125,7 @@ impl McpToolHandler for CommitTool {
                 seconds: Utc::now().timestamp(),
                 nanos: 0,
             }),
+            metadata: parse_metadata(&params),
         };
 
         let mut client = MemoryServiceClient::connect(self.cass_url.clone()).await?;
@@ -136,5 +146,56 @@ impl McpToolHandler for CommitTool {
             content: vec![McpContent::Text { text }],
             is_error: if resp.success { None } else { Some(true) },
         })
+    }
+}
+
+/// Build optional metadata from the MCP params. Returns None when no metadata
+/// fields were provided (the CASS service backfills defaults).
+pub(crate) fn parse_metadata(params: &Value) -> Option<MemoryMetadata> {
+    let mut md = MemoryMetadata::default();
+    let mut any = false;
+
+    let mut pb = PromptBudgetHints::default();
+    let mut have_pb = false;
+    if let Some(s) = params.get("priority").and_then(|v| v.as_str()) { pb.priority = s.into(); have_pb = true; }
+    if let Some(s) = params.get("injection_mode").and_then(|v| v.as_str()) { pb.injection_mode = s.into(); have_pb = true; }
+    if let Some(n) = params.get("max_prompt_tokens").and_then(|v| v.as_u64()) { pb.max_prompt_tokens = n as u32; have_pb = true; }
+    if let Some(n) = params.get("preferred_prompt_tokens").and_then(|v| v.as_u64()) { pb.preferred_prompt_tokens = n as u32; have_pb = true; }
+    if have_pb { md.prompt_budget = Some(pb); any = true; }
+
+    let mut rt = RetrievalMetadata::default();
+    let mut have_rt = false;
+    if let Some(f) = params.get("salience").and_then(|v| v.as_f64()) { rt.salience = f as f32; have_rt = true; }
+    if let Some(s) = params.get("volatility").and_then(|v| v.as_str()) { rt.volatility = s.into(); have_rt = true; }
+    if have_rt { md.retrieval = Some(rt); any = true; }
+
+    if let Some(s) = params.get("sensitivity").and_then(|v| v.as_str()) {
+        md.privacy = Some(PrivacyMetadata { sensitivity: s.into(), ..Default::default() });
+        any = true;
+    }
+    if let Some(s) = params.get("summary").and_then(|v| v.as_str()) { md.summary = s.into(); any = true; }
+
+    if any { Some(md) } else { None }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn test_metadata_parse_is_optional() {
+        let p = json!({ "content": "hello" });
+        assert!(parse_metadata(&p).is_none());
+    }
+
+    #[test]
+    fn test_metadata_parse_reads_fields() {
+        let p = json!({ "content": "hello", "priority": "high", "summary": "s", "salience": 0.8, "sensitivity": "private" });
+        let md = parse_metadata(&p).unwrap();
+        assert_eq!(md.prompt_budget.as_ref().unwrap().priority, "high");
+        assert_eq!(md.summary, "s");
+        assert!((md.retrieval.as_ref().unwrap().salience - 0.8).abs() < 1e-6);
+        assert_eq!(md.privacy.as_ref().unwrap().sensitivity, "private");
     }
 }

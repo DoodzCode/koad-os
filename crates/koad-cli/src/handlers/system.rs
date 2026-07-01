@@ -867,6 +867,7 @@ pub async fn handle_system_action(
 fn stop_citadel_processes() {
     let _ = Command::new("pkill").arg("koad-citadel").status();
     let _ = Command::new("pkill").arg("koad-cass").status();
+    let _ = Command::new("pkill").arg("koad-os-mcp").status();
 }
 
 /// Start koad-citadel and koad-cass.
@@ -895,7 +896,7 @@ fn start_citadel_services(config: &KoadConfig) -> Result<()> {
             .args(["start", "koad-citadel.service"])
             .status()?;
         if status.success() {
-            println!("\x1b[32m[OK]\x1b[0m Citadel and CASS started via systemctl.");
+            println!("\x1b[32m[OK]\x1b[0m Citadel, CASS, and MCP started via systemctl.");
             return Ok(());
         } else {
             warn!("systemctl start koad-citadel.service failed (likely auth required). Falling back to manual spawn.");
@@ -939,14 +940,27 @@ fn start_citadel_services(config: &KoadConfig) -> Result<()> {
         .spawn()
         .context("Failed to spawn koad-cass")?;
 
-    println!("\x1b[32m[2/2]\x1b[0m koad-cass started.");
+    println!("\x1b[32m[2/3]\x1b[0m koad-cass started.");
+    std::thread::sleep(Duration::from_millis(500));
+
+    // Start MCP Bridge.
+    Command::new(bin_dir.join("koad-os-mcp"))
+        .env("KOADOS_HOME", &config.home)
+        .env("KOAD_HOME", &config.home)
+        .env_remove("RUST_LOG")
+        .stdout(open_log("mcp", "out")?)
+        .stderr(open_log("mcp", "error")?)
+        .spawn()
+        .context("Failed to spawn koad-os-mcp")?;
+
+    println!("\x1b[32m[3/3]\x1b[0m koad-os-mcp started.");
 
     // Source .env for KOADOS_PAT_NOTION_MAIN etc. if present — best-effort.
     // (The spawned processes inherit this shell's env; actual secret resolution
     //  happens inside each binary via KoadConfig::resolve_secret.)
     drop(env_file); // not parsed here; binaries handle it internally.
 
-    println!("\x1b[32m[OK]\x1b[0m Citadel and CASS online.");
+    println!("\x1b[32m[OK]\x1b[0m Citadel, CASS, and MCP online.");
     Ok(())
 }
 
@@ -1099,6 +1113,7 @@ pub async fn handle_context_action(
                     seconds: Local::now().timestamp(),
                     nanos: Local::now().timestamp_subsec_nanos() as i32,
                 }),
+                metadata: None,
             };
 
             let res = cass.commit_fact(req).await?.into_inner();
@@ -1232,6 +1247,7 @@ pub async fn handle_context_action(
                             seconds: Local::now().timestamp(),
                             nanos: Local::now().timestamp_subsec_nanos() as i32,
                         }),
+                        metadata: None,
                     };
 
                     if cass.commit_fact(req).await.is_ok() {
@@ -1556,6 +1572,7 @@ async fn sync_session_histories(home: &std::path::Path, cass_url: &str) -> Resul
                                         nanos: 0,
                                     }),
                                     task_ids: vec![],
+                                    metadata: None,
                                 };
 
                                 if let Err(e) = client

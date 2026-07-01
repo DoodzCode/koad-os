@@ -9,13 +9,16 @@ pub struct JsonRpcRequest {
     pub jsonrpc: String,
     pub method: String,
     pub params: Option<Value>,
-    pub id: Value,
+    #[serde(default)]
+    pub id: Option<Value>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct JsonRpcResponse {
     pub jsonrpc: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub result: Option<Value>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub error: Option<Value>,
     pub id: Value,
 }
@@ -24,6 +27,7 @@ pub struct JsonRpcResponse {
 pub struct McpTool {
     pub name: String,
     pub description: String,
+    #[serde(rename = "inputSchema", alias = "input_schema")]
     pub input_schema: Value,
 }
 
@@ -98,8 +102,12 @@ impl McpServer {
     pub async fn handle_request(&self, req: JsonRpcRequest) -> JsonRpcResponse {
         let result = match req.method.as_str() {
             "initialize" => {
+                let client_version = req.params.as_ref()
+                    .and_then(|p| p.get("protocolVersion"))
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("2024-11-05");
                 Some(serde_json::json!({
-                    "protocolVersion": "2024-11-05",
+                    "protocolVersion": client_version,
                     "capabilities": {},
                     "serverInfo": {
                         "name": self.name,
@@ -160,7 +168,7 @@ impl McpServer {
             } else {
                 None
             },
-            id: req.id,
+            id: req.id.unwrap_or(Value::Null),
         }
     }
 }

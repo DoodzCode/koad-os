@@ -10,7 +10,7 @@ use tracing_subscriber::{fmt, prelude::*, EnvFilter};
 pub fn init_logging(service_name: &str, log_dir: Option<PathBuf>) -> Option<WorkerGuard> {
     let env_filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info"));
 
-    let stdout_layer = fmt::layer().with_target(false).with_thread_ids(true);
+    let stdout_layer = fmt::layer().with_target(false).with_thread_ids(true).with_writer(std::io::stderr);
 
     if let Some(path) = log_dir {
         let file_appender = tracing_appender::rolling::daily(path, format!("{}.log", service_name));
